@@ -17,6 +17,7 @@
 using namespace winrt;
 using namespace Microsoft::ReactNative;
 using namespace std::chrono;
+namespace React = Microsoft::ReactNative;
 
 struct Console : std::enable_shared_from_this<Console>, facebook::jsi::HostObject {
   bool exit{ false };
@@ -137,7 +138,7 @@ fire_and_forget Start() {
     co_await 100ms;
   }
 
-  std::cout << "\n\Exiting...\n";
+  std::cout << "\nExiting...\n";
   co_await host.UnloadInstance();
 
 }
