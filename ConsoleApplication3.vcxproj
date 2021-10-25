@@ -187,10 +187,10 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.targets" Condition="Exists('packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.targets')" />
-    <Import Project="packages\Microsoft.ReactNative.0.66.1\build\native\Microsoft.ReactNative.targets" Condition="Exists('packages\Microsoft.ReactNative.0.66.1\build\native\Microsoft.ReactNative.targets')" />
     <Import Project="packages\Unpackaged.0.0.1\build\unpackaged.targets" Condition="Exists('packages\Unpackaged.0.0.1\build\unpackaged.targets')" />
     <Import Project="packages\Microsoft.VCRTForwarders.140.1.0.7\build\native\Microsoft.VCRTForwarders.140.targets" Condition="Exists('packages\Microsoft.VCRTForwarders.140.1.0.7\build\native\Microsoft.VCRTForwarders.140.targets')" />
-    <Import Project="packages\Microsoft.ReactNative.Cxx.0.66.1\build\native\Microsoft.ReactNative.Cxx.targets" Condition="Exists('packages\Microsoft.ReactNative.Cxx.0.66.1\build\native\Microsoft.ReactNative.Cxx.targets')" />
+    <Import Project="packages\Microsoft.ReactNative.0.66.2\build\native\Microsoft.ReactNative.targets" Condition="Exists('packages\Microsoft.ReactNative.0.66.2\build\native\Microsoft.ReactNative.targets')" />
+    <Import Project="packages\Microsoft.ReactNative.Cxx.0.66.2\build\native\Microsoft.ReactNative.Cxx.targets" Condition="Exists('packages\Microsoft.ReactNative.Cxx.0.66.2\build\native\Microsoft.ReactNative.Cxx.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -198,9 +198,9 @@
     </PropertyGroup>
     <Error Condition="!Exists('packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.props'))" />
     <Error Condition="!Exists('packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.targets'))" />
-    <Error Condition="!Exists('packages\Microsoft.ReactNative.0.66.1\build\native\Microsoft.ReactNative.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.ReactNative.0.66.1\build\native\Microsoft.ReactNative.targets'))" />
     <Error Condition="!Exists('packages\Unpackaged.0.0.1\build\unpackaged.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Unpackaged.0.0.1\build\unpackaged.targets'))" />
     <Error Condition="!Exists('packages\Microsoft.VCRTForwarders.140.1.0.7\build\native\Microsoft.VCRTForwarders.140.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.VCRTForwarders.140.1.0.7\build\native\Microsoft.VCRTForwarders.140.targets'))" />
-    <Error Condition="!Exists('packages\Microsoft.ReactNative.Cxx.0.66.1\build\native\Microsoft.ReactNative.Cxx.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.ReactNative.Cxx.0.66.1\build\native\Microsoft.ReactNative.Cxx.targets'))" />
+    <Error Condition="!Exists('packages\Microsoft.ReactNative.0.66.2\build\native\Microsoft.ReactNative.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.ReactNative.0.66.2\build\native\Microsoft.ReactNative.targets'))" />
+    <Error Condition="!Exists('packages\Microsoft.ReactNative.Cxx.0.66.2\build\native\Microsoft.ReactNative.Cxx.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.ReactNative.Cxx.0.66.2\build\native\Microsoft.ReactNative.Cxx.targets'))" />
   </Target>
 </Project>
