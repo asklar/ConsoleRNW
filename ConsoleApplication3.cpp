@@ -12,12 +12,26 @@
 
 #include <JSI/JsiApiContext.h>
 
+
+#include <NativeModules.h>
+
 #include <winrt/Windows.Graphics.Display.h>
 
 using namespace winrt;
 using namespace Microsoft::ReactNative;
 using namespace std::chrono;
-namespace React = Microsoft::ReactNative;
+
+
+REACT_MODULE(DeviceInfo)
+struct DeviceInfo {
+
+};
+
+struct HeadlessPackageProvider : winrt::implements<HeadlessPackageProvider, IReactPackageProvider> {
+  void CreatePackage(winrt::Microsoft::ReactNative::IReactPackageBuilder const& packageBuilder) noexcept {
+    AddAttributedModules(packageBuilder);
+  }
+};
 
 struct Console : std::enable_shared_from_this<Console>, facebook::jsi::HostObject {
   bool exit{ false };
@@ -96,13 +110,13 @@ private:
   winrt::Windows::Graphics::Display::DisplayInformation::DpiChanged_revoker m_dpiChangedRevoker{};
   Mso::Functor<void(React::JSValueObject&&)> m_notifyCallback;
 };
-
-static const React::ReactPropertyId<React::ReactNonAbiValue<std::shared_ptr<DeviceInfoHolder>>>
-& DeviceInfoHolderPropertyId() noexcept {
-  static const React::ReactPropertyId<React::ReactNonAbiValue<std::shared_ptr<DeviceInfoHolder>>> prop{
-      L"ReactNative.DeviceInfo", L"DeviceInfoHolder" };
-  return prop;
-}
+//
+//static const React::ReactPropertyId<React::ReactNonAbiValue<std::shared_ptr<DeviceInfoHolder>>>
+//& DeviceInfoHolderPropertyId() noexcept {
+//  static const React::ReactPropertyId<React::ReactNonAbiValue<std::shared_ptr<DeviceInfoHolder>>> prop{
+//      L"ReactNative.DeviceInfo", L"DeviceInfoHolder" };
+//  return prop;
+//}
 
 std::shared_ptr<Console> console;
 ReactNativeHost host{ nullptr };
@@ -110,14 +124,17 @@ ReactNativeHost host{ nullptr };
 fire_and_forget Start() {
   auto s = host.InstanceSettings();
   s.JavaScriptBundleFile(L"index");
-  s.UseWebDebugger(false);
+  //s.UseWebDebugger(false);
+  s.UseWebDebugger(true);
   s.UseFastRefresh(true);
   s.UseDeveloperSupport(false);
 
+  s.PackageProviders().Append(winrt::make<HeadlessPackageProvider>());
+
   s.UIDispatcher(winrt::make<MockDispatcher>());
-  auto dih = std::make_shared<DeviceInfoHolder>();
-  auto props = ReactPropertyBag(s.Properties());
-  props.Set(DeviceInfoHolderPropertyId(), std::move(dih));
+  //auto dih = std::make_shared<DeviceInfoHolder>();
+  //auto props = ReactPropertyBag(s.Properties());
+  //props.Set(DeviceInfoHolderPropertyId(), std::move(dih));
 
   console = std::make_shared<Console>();
   auto token = s.InstanceCreated([](
