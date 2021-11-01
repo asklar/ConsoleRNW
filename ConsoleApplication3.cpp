@@ -25,6 +25,15 @@ REACT_MODULE(DeviceInfo)
 struct DeviceInfo {
 };
 
+// The default LogBox impl will try to show XAML UI - so stub it out for now.
+REACT_MODULE(LogBox)
+struct LogBox {
+  REACT_METHOD(show)
+    void show() noexcept {}
+  REACT_METHOD(hide)
+    void hide() noexcept {}
+};
+
 struct HeadlessPackageProvider : winrt::implements<HeadlessPackageProvider, IReactPackageProvider> {
   void CreatePackage(winrt::Microsoft::ReactNative::IReactPackageBuilder const& packageBuilder) noexcept {
     AddAttributedModules(packageBuilder);
@@ -123,7 +132,6 @@ struct Console : std::enable_shared_from_this<Console>, facebook::jsi::HostObjec
   std::vector<facebook::jsi::PropNameID> getPropertyNames(facebook::jsi::Runtime& rt) noexcept override {
     return facebook::jsi::PropNameID::names({ logName(rt), facebook::jsi::PropNameID::forAscii(rt, "exit")});
   }
-
 };
 
 
@@ -163,14 +171,29 @@ private:
 
 std::shared_ptr<Console> console;
 ReactNativeHost host{ nullptr };
-uint32_t reloadCount{ 1 };
+winrt::Microsoft::ReactNative::ReactContext g_context;
+
+// This will send keyboard input to JS for processing
+void sendInput(char c) {
+  if (g_context) {
+    g_context.JSDispatcher().Post([c]() {
+        ExecuteJsi(g_context, [c](facebook::jsi::Runtime& rt) {
+          auto si = rt.global().getProperty(rt, "sendInput");
+          if (!si.isUndefined()) {
+            rt.global().getPropertyAsFunction(rt, "sendInput").call(rt, std::string(1, c));
+          }
+          });
+      });
+  }
+}
+
 
 fire_and_forget Start() {
   auto s = host.InstanceSettings();
   s.JavaScriptBundleFile(L"index");
   s.UseWebDebugger(false); // WebDebugger will not work since we are using JSI.
   s.UseFastRefresh(true);
-  s.UseDeveloperSupport(false);
+  s.UseDeveloperSupport(true); // Required for fast refresh
 
   // Hook up JS console function to output to the console - by default it goes to debug output.
   s.NativeLogger([](winrt::Microsoft::ReactNative::LogLevel level, winrt::hstring message) noexcept {
@@ -181,8 +204,8 @@ fire_and_forget Start() {
   //s.DebuggerBreakOnNextLine(true); // Doesn't work with Chakra
 
   s.RedBoxHandler(winrt::make<ConsoleRedBoxHandler>(
-    []() noexcept {++reloadCount; host.ReloadInstance(); },
-    []() noexcept { host.UnloadInstance(); }));
+    []() noexcept { host.ReloadInstance(); },
+    []() noexcept { console->exit = true; host.UnloadInstance(); }));
 
   s.PackageProviders().Append(winrt::make<HeadlessPackageProvider>());
 
@@ -192,6 +215,7 @@ fire_and_forget Start() {
   auto token = s.InstanceCreated([](
     winrt::Windows::Foundation::IInspectable const& sender, const InstanceCreatedEventArgs& args) {
       auto context = React::ReactContext(args.Context());
+      g_context = context;
       ExecuteJsi(context, [](facebook::jsi::Runtime& rt) {
         auto obj = rt.global().createFromHostObject(rt, console);
 
@@ -218,17 +242,28 @@ int main()
   host = ReactNativeHost();
   bool exit = false;
   host.InstanceSettings().InstanceDestroyed([&exit](auto&& sender, auto&& args) {
-    --reloadCount;
-    if (reloadCount == 0) {
+    g_context = nullptr;
+    if (console->exit) {
       exit = true; // Only exit if we are not just reloading another instance
     }
     });
 
   Start();
-
+  auto in = GetStdHandle(STD_INPUT_HANDLE);
+  DWORD num;
 
   while (!exit) {
     Sleep(100);
+
+   	if(GetNumberOfConsoleInputEvents(in,&num) && num)
+  	{
+      INPUT_RECORD input;
+      ReadConsoleInput(in, &input, 1, &num);
+
+      if (input.EventType == KEY_EVENT && input.Event.KeyEvent.bKeyDown)
+        sendInput(input.Event.KeyEvent.uChar.AsciiChar);
+	  }
+
     g_uiDispatcher.RunAll();
   }
   winrt::uninit_apartment();

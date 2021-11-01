@@ -1,12 +1,11 @@
-/**
- * @format
- */
+import {LogBox} from 'react-native';
 
-// We need to import something from react-native, so that react-native is included in the bundle correctly.
-import {NativeModules} from 'react-native'; 
+// We dont support showing UI -- so remove the LogBox
+LogBox.uninstall();
+
+import './App';
+
 
 const J = 'Java';
 const S = 'Script';
 nativeConsole.log(`Hello from ${J}${S}!`);
-
-nativeConsole.exit();

@@ -167,7 +167,7 @@ namespace facebook
           return;
         }
 
-        winrt::Microsoft::ReactNative::JSValueArray readyTimers;
+        std::vector< uint64_t> readyTimers;
         auto now = std::chrono::system_clock::now();
         auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
 
@@ -188,9 +188,15 @@ namespace facebook
         }
 
         if (!readyTimers.empty()) {
-          winrt::Microsoft::ReactNative::JSValueArray args;
-          args.push_back(winrt::Microsoft::ReactNative::JSValue(std::move(readyTimers)));
-          strongThis->m_context.CallJSFunction(L"JSTimers", L"callTimers", args);
+          strongThis->m_context.CallJSFunction(L"JSTimers", L"callTimers", [readyTimers = std::move(readyTimers)](winrt::Microsoft::ReactNative::IJSValueWriter const& writer) {
+            writer.WriteArrayBegin();
+            writer.WriteArrayBegin();
+            for (auto id : readyTimers) {
+              WriteValue(writer, id);
+            }
+            writer.WriteArrayEnd();
+            writer.WriteArrayEnd();
+            });
         }
 
         if (!strongThis->m_timerQueue.IsEmpty()) {
@@ -218,9 +224,13 @@ namespace facebook
       auto initialDueTime = scheduledTime + period;
 
       if (scheduledTime + period <= now_ms && !repeat) {
-        winrt::Microsoft::ReactNative::JSValueArray args;
-        args.push_back(winrt::Microsoft::ReactNative::JSValue(winrt::Microsoft::ReactNative::JSValueArray { id }));
-        m_context.CallJSFunction(L"JSTimers", L"callTimers", args);
+        m_context.CallJSFunction(L"JSTimers", L"callTimers", [id](winrt::Microsoft::ReactNative::IJSValueWriter const& writer) {
+          writer.WriteArrayBegin();
+          writer.WriteArrayBegin();
+          WriteValue(writer, id);
+          writer.WriteArrayEnd();
+          writer.WriteArrayEnd();
+          });
         return;
       }
 
