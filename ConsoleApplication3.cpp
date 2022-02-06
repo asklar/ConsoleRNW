@@ -12,15 +12,97 @@
 
 #include <JSI/JsiApiContext.h>
 
+#include <NativeModules.h>
+
 #include <winrt/Windows.Graphics.Display.h>
 
 using namespace winrt;
 using namespace Microsoft::ReactNative;
 using namespace std::chrono;
-namespace React = Microsoft::ReactNative;
+
+// Work around crash in DeviceInfo when running outside of XAML environment
+REACT_MODULE(DeviceInfo)
+struct DeviceInfo {
+};
+
+// The default LogBox impl will try to show XAML UI - so stub it out for now.
+REACT_MODULE(LogBox)
+struct LogBox {
+  REACT_METHOD(show)
+    void show() noexcept {}
+  REACT_METHOD(hide)
+    void hide() noexcept {}
+};
+
+struct HeadlessPackageProvider : winrt::implements<HeadlessPackageProvider, IReactPackageProvider> {
+  void CreatePackage(winrt::Microsoft::ReactNative::IReactPackageBuilder const& packageBuilder) noexcept {
+    AddAttributedModules(packageBuilder);
+  }
+};
+
+// React-Native-Windows will normally show errors in a XAML element.  For a console app we need to do something else with them.
+struct ConsoleRedBoxHandler : winrt::implements<ConsoleRedBoxHandler, winrt::Microsoft::ReactNative::IRedBoxHandler>
+{
+  ConsoleRedBoxHandler(std::function<void()>&& fnReloadInstance, std::function<void()>&& fnShutdownInstance) {
+    m_fnReloadInstance = std::move(fnReloadInstance);
+    m_fnShutdownInstance = std::move(fnShutdownInstance);
+  }
+
+  void ShowNewError(winrt::Microsoft::ReactNative::IRedBoxErrorInfo info, winrt::Microsoft::ReactNative::RedBoxErrorType type) noexcept {
+    switch (type) {
+    case winrt::Microsoft::ReactNative::RedBoxErrorType::JavaScriptSoft:
+      std::cerr << "JavaScript Warning: ";
+      break;
+    case winrt::Microsoft::ReactNative::RedBoxErrorType::JavaScriptFatal:
+      std::cerr << "JavaScript Error: ";
+      break;
+    case winrt::Microsoft::ReactNative::RedBoxErrorType::Native:
+      std::cerr << "Native Error: ";
+      break;
+    }
+    std::cerr << winrt::to_string(info.Message()) << std::endl;
+
+    for (auto frame : info.Callstack()) {
+      std::cerr << winrt::to_string(frame.File()) << '@' << winrt::to_string(frame.Method()) << ':' << frame.Line() << ':' << frame.Column() << std::endl;
+    }
+
+    std::cerr << std::endl;
+
+    // If it was some kind of fatal error, we should provide a way for the dev to restart the instance
+    if (type != winrt::Microsoft::ReactNative::RedBoxErrorType::JavaScriptSoft) {
+      char c;
+      do
+      {
+        std::cout << "Reload Instance? [y/n] ";
+        std::cin >> c;
+      } while (!std::cin.fail() && c != 'y' && c != 'n');
+
+      if (c == 'y')
+        m_fnReloadInstance();
+      else
+        m_fnShutdownInstance();
+    }
+  }
+
+  bool IsDevSupportEnabled() noexcept {
+    return true;
+  }
+
+  void UpdateError(winrt::Microsoft::ReactNative::IRedBoxErrorInfo info) noexcept {
+    // no-op
+  }
+
+  void DismissRedBox() noexcept {
+    // no-op
+  }
+
+private:
+  std::function<void()> m_fnReloadInstance;
+  std::function<void()> m_fnShutdownInstance;
+};
 
 struct Console : std::enable_shared_from_this<Console>, facebook::jsi::HostObject {
-  bool exit{ false };
+  bool exit { false };
   facebook::jsi::PropNameID logName(facebook::jsi::Runtime& rt) {
     return facebook::jsi::PropNameID::forAscii(rt, "log");
   }
@@ -30,7 +112,7 @@ struct Console : std::enable_shared_from_this<Console>, facebook::jsi::HostObjec
       return facebook::jsi::Function::createFromHostFunction(rt, logName(rt), 1, 
         [](facebook::jsi::Runtime& rt,const facebook::jsi::Value& v, const facebook::jsi::Value* args, size_t count) -> facebook::jsi::Value {
           for (size_t i = 0; i < count; i++) {
-            std::cout << args[i].toString(rt).utf8(rt);
+            std::cout << args[i].toString(rt).utf8(rt) << std::endl;
           }
           return facebook::jsi::Value::undefined();
         });
@@ -50,83 +132,94 @@ struct Console : std::enable_shared_from_this<Console>, facebook::jsi::HostObjec
   std::vector<facebook::jsi::PropNameID> getPropertyNames(facebook::jsi::Runtime& rt) noexcept override {
     return facebook::jsi::PropNameID::names({ logName(rt), facebook::jsi::PropNameID::forAscii(rt, "exit")});
   }
-
 };
 
-struct MockDispatcher : winrt::implements<MockDispatcher, IReactDispatcher> {
-  bool HasThreadAccess() { return true; }
+
+struct UIDispatcher
+{
   void Post(ReactDispatcherCallback cb) {
-    cb();
+    m_tasks.push_back(cb);
   }
-};
 
-namespace Mso {
-  template<typename T>
-  using Functor = std::function<T>;
-}
-
-// copied from RNW - do not modify
-struct DeviceInfoHolder {
-  DeviceInfoHolder() = default;
-
-  static void SetCallback(
-    const React::ReactPropertyBag& propertyBag,
-    Mso::Functor<void(React::JSValueObject&&)>&& callback) noexcept {
-
-  }
-  static void InitDeviceInfoHolder(const React::ReactPropertyBag& propertyBag) noexcept {}
-  static React::JSValueObject GetDimensions(const React::ReactPropertyBag& propertyBag) noexcept {
-    return React::JSValueObject{};
+  void RunAll() {
+    auto tasks = std::move(m_tasks);
+    for (auto task : tasks)
+      task();
   }
 
 private:
-  //React::JSValueObject getDimensions() noexcept;
-  //void updateDeviceInfo() noexcept;
-  //void notifyChanged() noexcept;
-
-  float m_windowWidth{ 0 };
-  float m_windowHeight{ 0 };
-  float m_scale{ 0 };
-  double m_textScaleFactor{ 0 };
-  float m_dpi{ 0 };
-  uint32_t m_screenWidth{ 0 };
-  uint32_t m_screenHeight{ 0 };
-
-  winrt::Windows::UI::Core::CoreWindow::SizeChanged_revoker m_sizeChangedRevoker;
-  winrt::Windows::Graphics::Display::DisplayInformation::DpiChanged_revoker m_dpiChangedRevoker{};
-  Mso::Functor<void(React::JSValueObject&&)> m_notifyCallback;
+  std::vector<ReactDispatcherCallback> m_tasks;
 };
 
-static const React::ReactPropertyId<React::ReactNonAbiValue<std::shared_ptr<DeviceInfoHolder>>>
-& DeviceInfoHolderPropertyId() noexcept {
-  static const React::ReactPropertyId<React::ReactNonAbiValue<std::shared_ptr<DeviceInfoHolder>>> prop{
-      L"ReactNative.DeviceInfo", L"DeviceInfoHolder" };
-  return prop;
-}
+UIDispatcher g_uiDispatcher;
+
+// Super simplistic dispatcher manually pumped in main loop
+struct MockDispatcher : winrt::implements<MockDispatcher, IReactDispatcher> {
+
+  MockDispatcher() {
+    m_threadId = std::this_thread::get_id();
+  }
+
+  bool HasThreadAccess() { return m_threadId == std::this_thread::get_id(); }
+  void Post(ReactDispatcherCallback cb) {
+    g_uiDispatcher.Post(cb);
+  }
+
+private:
+  std::thread::id m_threadId;
+};
 
 std::shared_ptr<Console> console;
 ReactNativeHost host{ nullptr };
+winrt::Microsoft::ReactNative::ReactContext g_context;
+
+// This will send keyboard input to JS for processing
+void sendInput(char c) {
+  if (g_context) {
+    g_context.JSDispatcher().Post([c]() {
+        ExecuteJsi(g_context, [c](facebook::jsi::Runtime& rt) {
+          auto si = rt.global().getProperty(rt, "sendInput");
+          if (!si.isUndefined()) {
+            rt.global().getPropertyAsFunction(rt, "sendInput").call(rt, std::string(1, c));
+          }
+          });
+      });
+  }
+}
+
 
 fire_and_forget Start() {
   auto s = host.InstanceSettings();
   s.JavaScriptBundleFile(L"index");
-  s.UseWebDebugger(false);
+  s.UseWebDebugger(false); // WebDebugger will not work since we are using JSI.
   s.UseFastRefresh(true);
-  s.UseDeveloperSupport(false);
+  s.UseDeveloperSupport(true); // Required for fast refresh
+
+  // Hook up JS console function to output to the console - by default it goes to debug output.
+  s.NativeLogger([](winrt::Microsoft::ReactNative::LogLevel level, winrt::hstring message) noexcept {
+    std::cout << winrt::to_string(message) << std::endl;
+    });
+
+  //s.UseDirectDebugger(true);
+  //s.DebuggerBreakOnNextLine(true); // Doesn't work with Chakra
+
+  s.RedBoxHandler(winrt::make<ConsoleRedBoxHandler>(
+    []() noexcept { host.ReloadInstance(); },
+    []() noexcept { console->exit = true; host.UnloadInstance(); }));
+
+  s.PackageProviders().Append(winrt::make<HeadlessPackageProvider>());
 
   s.UIDispatcher(winrt::make<MockDispatcher>());
-  auto dih = std::make_shared<DeviceInfoHolder>();
-  auto props = ReactPropertyBag(s.Properties());
-  props.Set(DeviceInfoHolderPropertyId(), std::move(dih));
 
   console = std::make_shared<Console>();
   auto token = s.InstanceCreated([](
     winrt::Windows::Foundation::IInspectable const& sender, const InstanceCreatedEventArgs& args) {
       auto context = React::ReactContext(args.Context());
+      g_context = context;
       ExecuteJsi(context, [](facebook::jsi::Runtime& rt) {
         auto obj = rt.global().createFromHostObject(rt, console);
 
-        static auto consoleName = facebook::jsi::PropNameID::forAscii(rt, "nativeConsole");
+		auto consoleName = facebook::jsi::PropNameID::forAscii(rt, "nativeConsole");
         rt.global().setProperty(rt, consoleName, obj);
         });
 
@@ -149,11 +242,29 @@ int main()
   host = ReactNativeHost();
   bool exit = false;
   host.InstanceSettings().InstanceDestroyed([&exit](auto&& sender, auto&& args) {
-    exit = true;
+    g_context = nullptr;
+    if (console->exit) {
+      exit = true; // Only exit if we are not just reloading another instance
+    }
     });
 
   Start();
-    
-  while (!exit) { Sleep(100); }
+  auto in = GetStdHandle(STD_INPUT_HANDLE);
+  DWORD num;
+
+  while (!exit) {
+    Sleep(100);
+
+   	if(GetNumberOfConsoleInputEvents(in,&num) && num)
+  	{
+      INPUT_RECORD input;
+      ReadConsoleInput(in, &input, 1, &num);
+
+      if (input.EventType == KEY_EVENT && input.Event.KeyEvent.bKeyDown)
+        sendInput(input.Event.KeyEvent.uChar.AsciiChar);
+	  }
+
+    g_uiDispatcher.RunAll();
+  }
   winrt::uninit_apartment();
 }
