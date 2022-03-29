@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="..\packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.props" Condition="Exists('..\packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.props')" />
+  <Import Project="$(SolutionDir)\ExperimentalFeatures.props" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -98,6 +99,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile>$(IntDir)pch.pch</PrecompiledHeaderOutputFile>
       <AdditionalIncludeDirectories>$(SolutionDir)example\node_modules\react-native-windows\Shared;$(SolutionDir)example\node_modules\react-native-windows\Mso;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessToFile>false</PreprocessToFile>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -164,6 +166,7 @@
     <ClInclude Include="Dispatcher.h" />
     <ClInclude Include="PaperUIManager.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="Win32ReactRootView.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="RNW-Win32.h" />
     <ClInclude Include="targetver.h" />
@@ -176,6 +179,7 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Timing.cpp" />
+    <ClCompile Include="Win32ReactRootView.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="RNW-Win32.rc" />
@@ -187,6 +191,18 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\example\node_modules\react-native-windows\ReactCommon\ReactCommon.vcxproj">
+      <Project>{a9d95a91-4db7-4f72-beb6-fe8a5c89bfbd}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <CallingConvention>StdCall</CallingConvention>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(ReactNativeWindowsDir)\PropertySheets\External\Microsoft.ReactNative.Uwp.CppApp.targets" Condition="'$(UseExperimentalNuget)'!='true'" />
@@ -194,6 +210,7 @@
     <Import Project="..\packages\Microsoft.ReactNative.Cxx.0.66.2\build\native\Microsoft.ReactNative.Cxx.targets" Condition="Exists('..\packages\Microsoft.ReactNative.Cxx.0.66.2\build\native\Microsoft.ReactNative.Cxx.targets') And '$(UseExperimentalNuget)'=='true'" />
     <Import Project="..\packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.targets" Condition="Exists('..\packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.targets')" />
     <Import Project="..\packages\Unpackaged.0.0.1\build\unpackaged.targets" Condition="Exists('..\packages\Unpackaged.0.0.1\build\unpackaged.targets')" />
+    <Import Project="..\packages\ReactNative.Hermes.Windows.0.9.0-ms.1\build\native\ReactNative.Hermes.Windows.targets" Condition="Exists('..\packages\ReactNative.Hermes.Windows.0.9.0-ms.1\build\native\ReactNative.Hermes.Windows.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -204,5 +221,6 @@
     <Error Condition="!Exists('..\packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.props'))" />
     <Error Condition="!Exists('..\packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.targets'))" />
     <Error Condition="!Exists('..\packages\Unpackaged.0.0.1\build\unpackaged.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Unpackaged.0.0.1\build\unpackaged.targets'))" />
+    <Error Condition="!Exists('..\packages\ReactNative.Hermes.Windows.0.9.0-ms.1\build\native\ReactNative.Hermes.Windows.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\ReactNative.Hermes.Windows.0.9.0-ms.1\build\native\ReactNative.Hermes.Windows.targets'))" />
   </Target>
 </Project>

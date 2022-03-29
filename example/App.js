@@ -1,26 +1,32 @@
 /**
+ * Sample React Native App
+ * https://github.com/facebook/react-native
+ *
  * @format
+ * @flow strict-local
  */
 
+debugger;
 
-function sendInput(c) {
-  try {
-    nativeConsole.log(`<${c.toUpperCase()}>`);
+import React from 'react';
 
-    if (c === 'e') {
-      throw new Error('We throw an error on "e"!');
-    }
-    if (c === 'q') {
-        nativeConsole.exit();
-    }
-  } catch (e) {
-    // If we throw within a JSI method, we appear to crash.  Catching errors and pushing
-    // them to a  timer means they run within a loop that redbox will catch them.
-      setTimeout(() => {throw e}, 1);
+import {
+  View,
+} from 'react-native';
+
+nativeLoggingHook("I'm in app.js", 0);
+
+class App  extends React.Component {
+
+  render() {
+    console.log("HELLO WORLD");
+    nativeLoggingHook("************ I'm in render()", 0);
+    debugger;
+    return (
+    < View style={{width: 400, height: 600}}/>
+    );
   }
 }
 
-// This function is called by native
-global.sendInput = sendInput;
 
-
+export default App;

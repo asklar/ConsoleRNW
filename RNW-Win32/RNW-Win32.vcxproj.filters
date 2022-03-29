@@ -36,6 +36,9 @@
     <ClInclude Include="PaperUIManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Win32ReactRootView.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RNW-Win32.cpp">
@@ -48,6 +51,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="PaperUIManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Win32ReactRootView.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

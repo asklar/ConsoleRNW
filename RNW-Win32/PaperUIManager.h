@@ -1,15 +1,19 @@
 #pragma once
 #include <NativeModules.h>
+#include "Win32ReactRootView.h"
+#include <../yoga/yoga/YGNode.h>
+#include <../yoga/yoga/Yoga.h>
 
 namespace Mso {
     template<typename T>
     using Functor = std::function<T>;
 }
-void AssertTag(bool, DWORD) {}
+void AssertTag(bool, DWORD);
 
 REACT_MODULE(PaperUIManager, L"UIManager")
-struct PaperUIManager final {
+struct PaperUIManager final : std::enable_shared_from_this<PaperUIManager> {
     PaperUIManager() {}
+    PaperUIManager(const PaperUIManager&) = delete;
     ~PaperUIManager();
 
     REACT_INIT(Initialize)
@@ -139,7 +143,43 @@ struct PaperUIManager final {
     REACT_METHOD(dismissPopupMenu)
         void dismissPopupMenu() noexcept;
 
+    REACT_METHOD(onBatchCompleted)
+        void onBatchCompleted() noexcept;
+
+    void AddMeasuredRootView(Win32ReactRootView* root);
+    void DoLayout();
+    void UpdateExtraLayout(int64_t tag);
+    static winrt::Microsoft::ReactNative::ReactPropertyId<
+        winrt::Microsoft::ReactNative::ReactNonAbiValue<std::shared_ptr<PaperUIManager>>> UIManagerProperty() {
+        static winrt::Microsoft::ReactNative::ReactPropertyId<winrt::Microsoft::ReactNative::ReactNonAbiValue<std::shared_ptr<PaperUIManager>>> _value{
+            L"Microsoft.ReactNative.Win32",
+            L"PaperUIManager"
+        };
+        return _value;
+    }
 private:
     winrt::Microsoft::ReactNative::ReactContext m_context;
-    //std::shared_ptr<facebook::react::IUIManager> m_uimanager;
+
+    struct YogaNodeDeleter {
+        void operator()(YGNodeRef node);
+    };
+
+    using YogaNodePtr = std::unique_ptr<YGNode, YogaNodeDeleter>;
+
+    struct ShadowNode {
+        HWND window{};
+        YogaNodePtr yogaNode{};
+        ShadowNode(HWND w) : window(w), yogaNode(new YGNode{}) {
+
+        }
+        ShadowNode(const ShadowNode&) = delete;
+        ShadowNode(ShadowNode&&) = default;
+    };
+
+    std::map<int64_t, std::unique_ptr<ShadowNode>> m_nodes;
+
+    HWND TagToHWND(int64_t);
+    int64_t m_rootTag{};
+
+
 };

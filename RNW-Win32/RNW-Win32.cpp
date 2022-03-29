@@ -9,6 +9,9 @@
 #include <NativeModules.h>
 #include "Dispatcher.h"
 #include "RedBoxHandler.h"
+#include "Win32ReactRootView.h"
+#include "ModuleRegistration.h"
+#include "PaperUIManager.h"
 
 #pragma comment(linker,"\"/manifestdependency:type='win32' \
  name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
@@ -28,65 +31,56 @@ bool g_exit{ false };
 // Work around crash in DeviceInfo when running outside of XAML environment
 REACT_MODULE(DeviceInfo)
 struct DeviceInfo {
+    REACT_CONSTANT_PROVIDER(ConstantsViaConstantsProvider)
+        void ConstantsViaConstantsProvider(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept {
+        JSValueObject screen
+        { {
+            { "fontScale", 1 },
+            { "scale", 1},
+            { "height", 400 },
+            { "width", 600},
+        } };
+        JSValueObject window{
+            { "fontScale", 1 },
+            { "scale", 1},
+            { "height", 400 },
+            { "width", 600},
+        };
+        JSValueObject dimensions 
+        { {
+            { "screen", std::move(screen) },
+            { "window", std::move(window) },
+        } };
+        constants.Add(L"Dimensions", dimensions);
+
+        //
+        //constants.Writer().WritePropertyName(L"Dimensions");
+        //constants.Writer().WriteObjectBegin();
+        //dimensions.WriteTo(constants.Writer());
+        //constants.Writer().WriteObjectEnd();
+        //constants.Add(L"Dimensions", JSValue(std::move(dimensions)));
+    }
 };
 
 struct HeadlessPackageProvider : winrt::implements<HeadlessPackageProvider, IReactPackageProvider> {
     void CreatePackage(winrt::Microsoft::ReactNative::IReactPackageBuilder const& packageBuilder) noexcept {
-        AddAttributedModules(packageBuilder);
+
+        //AddAttributedModules(packageBuilder);
+        std::vector<std::wstring> turboModules = { L"UIManager", L"DeviceInfo" };
+        for (auto const* reg = ModuleRegistration::Head(); reg != nullptr; reg = reg->Next()) {
+            if (std::find(turboModules.begin(), turboModules.end(), reg->ModuleName()) != turboModules.end()) {
+                // skip
+            }
+            else {
+                packageBuilder.AddModule(reg->ModuleName(), reg->MakeModuleProvider());
+            }
+        }
+
+
+        auto tm = packageBuilder.as<IReactPackageBuilderExperimental>();
+        tm.AddTurboModule(L"UIManager", winrt::Microsoft::ReactNative::MakeModuleProvider<PaperUIManager>());
+        tm.AddTurboModule(L"DeviceInfo", winrt::Microsoft::ReactNative::MakeModuleProvider<DeviceInfo>());
     }
-};
-
-
-
-//
-//struct Win32ReactViewHost : winrt::implements<Win32ReactViewHost, Microsoft::ReactNative::IReactViewHost> {
-//
-//};
-
-
-
-struct Win32ReactRootView : std::enable_shared_from_this<Win32ReactRootView> {
-    // facebook::react::IReactRootView {
-
-    Win32ReactRootView(HWND hostWnd) : m_wnd(hostWnd) {
-    }
-
-    //Windows::Foundation::IAsyncAction ReloadViewInstance() {
-    //    return {};
-    //}
-
-    //Windows::Foundation::IAsyncAction ReloadViewInstanceWithOptions(ReactViewOptions options) {
-    //    return {};
-    //}
-
-    //Windows::Foundation::IAsyncAction UnloadViewInstance() {
-    //    return {};
-    //}
-
-    void Start() {
-        Microsoft::ReactNative::ReactViewOptions options;
-        options.ComponentName(winrt::to_hstring(m_componentName));
-
-        m_viewHost = Microsoft::ReactNative::ReactCoreInjection::MakeViewHost(host, options);
-
-        //m_viewHost.AttachViewInstance(viewInstance);
-    }
-
-    void JSComponentName(std::string_view sv) { m_componentName = sv; }
-    std::string JSComponentName() const noexcept {
-        return m_componentName;
-    }
-
-    void ReactNativeHost(Microsoft::ReactNative::ReactNativeHost host) {
-    }
-
-    Microsoft::ReactNative::IReactViewHost m_viewHost;
-    //Microsoft::ReactNative::IReactViewInstance m_reactViewInstance;
-
-private:
-    std::string m_componentName;
-    int64_t m_tag{ -1 };
-    HWND m_wnd{ nullptr };
 };
 
 
@@ -133,6 +127,16 @@ BOOL                InitInstance(HINSTANCE, int, _Out_ HWND&);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
+constexpr std::string_view to_string(winrt::Microsoft::ReactNative::LogLevel value) {
+    switch (value) {
+    case winrt::Microsoft::ReactNative::LogLevel::Info: return "Info";
+    case winrt::Microsoft::ReactNative::LogLevel::Warning: return "Warning";
+    case winrt::Microsoft::ReactNative::LogLevel::Trace: return "Trace";
+    case winrt::Microsoft::ReactNative::LogLevel::Error: return "Error";
+    case winrt::Microsoft::ReactNative::LogLevel::Fatal: return "Fatal";
+    default: throw std::invalid_argument("Invalid winrt::Microsoft::ReactNative::LogLevel value");
+    }
+}
 
 fire_and_forget Start() {
     auto s = host.InstanceSettings();
@@ -140,11 +144,16 @@ fire_and_forget Start() {
     s.UseWebDebugger(false); // WebDebugger will not work since we are using JSI.
     s.UseFastRefresh(true);
     s.UseDeveloperSupport(false);
+    s.UseDirectDebugger(true);
+    s.JSIEngineOverride(JSIEngine::Hermes);
 
     // Hook up JS console function to output to the console - by default it goes to debug output.
     s.NativeLogger([](winrt::Microsoft::ReactNative::LogLevel level, winrt::hstring message) noexcept {
-        std::cout << winrt::to_string(message) << std::endl;
-        });
+        auto prefix = "NativeLogger [" + std::string(to_string(level)) + "] ";
+        OutputDebugStringA(prefix.c_str());
+        OutputDebugStringW(message.c_str());
+        OutputDebugStringA("\n");
+    });
 
     auto token = s.InstanceCreated([] (
         winrt::Windows::Foundation::IInspectable const& sender, const InstanceCreatedEventArgs& args) -> winrt::fire_and_forget {
@@ -153,10 +162,10 @@ fire_and_forget Start() {
             
             rootview->ReactNativeHost(host);
 
-            rootview->Start();
+            rootview->Start(g_context);
             auto viewInstance = winrt::make_self<Win32ReactViewInstance>(host, rootview);
             rootview->m_viewHost.AttachViewInstance(viewInstance.as<IReactViewInstance>());
-            
+            return {};
         });
     //s.UseDirectDebugger(true);
     //s.DebuggerBreakOnNextLine(true); // Doesn't work with Chakra

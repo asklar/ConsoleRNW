@@ -1,6 +1,13 @@
 #include "pch.h"
 #include "PaperUIManager.h"
 
+void AssertTag(bool, DWORD) {}
+using namespace winrt::Microsoft::ReactNative;
+
+void PaperUIManager::YogaNodeDeleter::operator()(YGNodeRef node) {
+	YGNodeFree(node);
+}
+
 PaperUIManager::~PaperUIManager()
 {
 	if (m_context)
@@ -13,16 +20,15 @@ PaperUIManager::~PaperUIManager()
 void PaperUIManager::Initialize(winrt::Microsoft::ReactNative::ReactContext const& reactContext) noexcept
 {
 	m_context = reactContext;
-	//m_uimanager = Mso::React::GetUIManagerFromContext(reactContext.Handle());
+	winrt::Microsoft::ReactNative::ReactPropertyBag(m_context.Properties())
+		.Set(PaperUIManager::UIManagerProperty(), this);
+
 }
 
 void PaperUIManager::ConstantsViaConstantsProvider(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept
 {
-	auto writer = constants.Writer();
-	//m_uimanager->runForEachViewManager([&, writer](const char* viewClass) noexcept {
-	//	writer.WritePropertyName(winrt::to_hstring(viewClass));
-	//	WriteValue(writer, m_uimanager->getConstantsForViewManager(viewClass));
-	//	});
+
+
 }
 
 winrt::Microsoft::ReactNative::JSValueObject PaperUIManager::getConstantsForViewManager(std::string viewManagerName) noexcept
@@ -31,7 +37,31 @@ winrt::Microsoft::ReactNative::JSValueObject PaperUIManager::getConstantsForView
 	//auto writer = winrt::Microsoft::ReactNative::MakeJSValueTreeWriter();
 	//WriteValue(writer, d);
 	//return winrt::Microsoft::ReactNative::TakeJSValue(writer).MoveObject();
-	return {};
+	//return {};
+
+
+	auto view = JSValueObject{
+	{
+		{ "Constants", JSValueObject{} },
+		{ "Commands", JSValueObject{} },
+		{ "NativeProps", JSValueObject{
+			{ "onLayout", "function" },
+			{ "pointerEvents", "string" },
+			{ "onClick", "function" },
+			{ "onMouseEnter", "function" },
+			{ "onMouseLeave", "function" },
+			{ "focusable", "boolean" },
+			{ "enableFocusRing", "boolean" },
+			{ "tabIndex", "number" },
+		} },
+		{ "bubblingEventTypes", JSValueObject{
+		} },
+		{ "directEventTypes", JSValueObject{} },
+	}
+	};
+	return view;
+//	constants.Add(L"RCTView", view);
+
 }
 
 // Not part of the spec, but core polyfils this on the JS side.
@@ -52,20 +82,115 @@ winrt::Microsoft::ReactNative::JSValueObject PaperUIManager::lazilyLoadView(std:
 	return {};
 }
 
+void PaperUIManager::onBatchCompleted() noexcept {
+	DoLayout();
+}
+
+void PaperUIManager::UpdateExtraLayout(int64_t tag) {
+	// For nodes that are not self-measure, there may be styles applied that are
+	// applying padding. Here we make sure Yoga knows about that padding so yoga
+	// layout is aware of what rendering intends to do with it.  (net: buttons
+	// with padding shouldn't have clipped content anymore)
+
+/*
+	auto& shadowNode = m_nodes[tag];
+
+	if (shadowNode->IsExternalLayoutDirty()) {
+		YGNodeRef yogaNode = GetYogaNode(tag);
+		if (yogaNode)
+			shadowNode->DoExtraLayoutPrep(yogaNode);
+	}
+
+	for (int64_t child : shadowNode->m_children) {
+		UpdateExtraLayout(child);
+	}
+	*/
+}
+
+void PaperUIManager::DoLayout() {
+	/*
+	// Process vector of RN controls needing extra layout here.
+  const auto extraLayoutNodes = m_extraLayoutNodes;
+  for (const int64_t tag : extraLayoutNodes) {
+    ShadowNodeBase *node = static_cast<ShadowNodeBase *>(m_host->FindShadowNodeForTag(tag));
+    if (node) {
+      auto element = node->GetView().as<xaml::FrameworkElement>();
+      element.UpdateLayout();
+    }
+  }
+  // Values need to be cleared from the vector before next call to DoLayout.
+  m_extraLayoutNodes.clear();
+
+  */
+
+  // auto &rootTags = m_host->GetAllRootTags();
+	std::vector<int64_t> rootTags{ m_rootTag };
+  for (int64_t rootTag : rootTags) {
+    UpdateExtraLayout(rootTag);
+
+	const auto& rootShadowNode = m_nodes[rootTag];
+	YGNodeRef rootNode = rootShadowNode->yogaNode.get();
+	RECT rect{};
+	GetWindowRect(rootShadowNode->window, &rect);
+	float actualWidth = static_cast<float>(rect.right - rect.left);
+    float actualHeight = static_cast<float>(rect.bottom - rect.top);
+
+    // We must always run layout in LTR mode, which might seem unintuitive.
+    // We will flip the root of the tree into RTL by forcing the root XAML node's FlowDirection to RightToLeft
+    // which will inherit down the XAML tree, allowing all native controls to pick it up.
+    YGNodeCalculateLayout(rootNode, actualWidth, actualHeight, YGDirectionLTR);
+  }
+
+  for (auto &tagToYogaNode : m_nodes) {
+    int64_t tag = tagToYogaNode.first;
+    YGNodeRef yogaNode = tagToYogaNode.second->yogaNode.get();
+
+    if (!YGNodeGetHasNewLayout(yogaNode))
+      continue;
+    YGNodeSetHasNewLayout(yogaNode, false);
+
+    auto left = static_cast<int>(YGNodeLayoutGetLeft(yogaNode));
+	auto top = static_cast<int>(YGNodeLayoutGetTop(yogaNode));
+	auto width = static_cast<int>(YGNodeLayoutGetWidth(yogaNode));
+	auto height = static_cast<int>(YGNodeLayoutGetHeight(yogaNode));
+
+	const auto &shadowNode = m_nodes[tag];
+    
+	/*auto view = shadowNode.GetView();
+    auto pViewManager = shadowNode.GetViewManager();
+    pViewManager->SetLayoutProps(shadowNode, view, left, top, width, height);
+	*/
+	/// TODO
+	if (width == std::numeric_limits<int>::min() ||
+		height == std::numeric_limits<int>::min()) {
+		// no size
+	}
+	else {
+		SetWindowPos(shadowNode->window, nullptr, left, top, width, height, SWP_NOZORDER);
+	}
+  }
+
+}
+
 void PaperUIManager::createView(
 	double reactTag, // How come these cannot be int64_t?
 	std::string viewName,
 	double rootTag,
 	winrt::Microsoft::ReactNative::JSValueObject&& props) noexcept
 {
-	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
-	//	[uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), rootTag = static_cast<int64_t>(rootTag), props = std::move(props)]() mutable
-	//{
-	//	uimanager->createView(reactTag, std::move(viewName), rootTag, Mso::React::JSValueArgWriterToDynamic([props = std::move(props)](winrt::Microsoft::ReactNative::IJSValueWriter writer)
-	//	{
-	//		WriteValue(writer, std::move(props));
-	//	}));
-	//});
+	winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
+		[this, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), rootTag = static_cast<int64_t>(rootTag), props = std::move(props)]() mutable
+	{
+		if (viewName == "RCTView") {
+			auto tag = std::to_wstring(reactTag);
+			auto hwnd = CreateWindow(L"Static", tag.c_str(), WS_CHILD | WS_VISIBLE, 
+				0, 0, 0, 0, 
+				TagToHWND(rootTag), nullptr, nullptr, nullptr);
+			
+			m_nodes.emplace(reactTag, std::make_unique<ShadowNode>(hwnd));
+		}
+	});
+	
 }
 
 void PaperUIManager::updateView(double reactTag, std::string viewName, winrt::Microsoft::ReactNative::JSValueObject&& props) noexcept
@@ -240,15 +365,23 @@ void PaperUIManager::removeRootView(double reactTag) noexcept
 	//});
 }
 
+HWND PaperUIManager::TagToHWND(int64_t tag) {
+	return m_nodes.count(tag) != 0 ? m_nodes.at(tag)->window : 0;
+}
+
 void PaperUIManager::setChildren(double containerTag, winrt::Microsoft::ReactNative::JSValueArray&& reactTags) noexcept
 {
-	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [uimanager = m_uimanager, containerTag = static_cast<int64_t>(containerTag), reactTags = std::move(reactTags)]() mutable
-	//{
-	//	uimanager->setChildren(containerTag, Mso::React::JSValueArgWriterToDynamic([reactTags = std::move(reactTags)](winrt::Microsoft::ReactNative::IJSValueWriter writer)
-	//	{
-	//		WriteValue(writer, std::move(reactTags));
-	//	}));
-	//});
+	winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [this, containerTag = static_cast<int64_t>(containerTag), reactTags = std::move(reactTags)]() mutable
+	{
+		if (auto parentHwnd = TagToHWND(containerTag)) {
+			for (auto const& child : reactTags) {
+				if (auto childHwnd = TagToHWND(child.AsInt64())) {
+					SetParent(childHwnd, parentHwnd);
+				}
+			}
+		}
+		DoLayout();
+	});
 }
 
 void PaperUIManager::manageChildren(
@@ -310,3 +443,14 @@ void PaperUIManager::dismissPopupMenu() noexcept
 {
 	AssertTag(false, 0x2014759a /* tag_6fhw0 */);
 }
+
+void PaperUIManager::AddMeasuredRootView(Win32ReactRootView* root) {
+	auto rootHwnd = root->Window();
+	assert(rootHwnd != nullptr);
+	m_nodes.emplace(root->Tag(), std::make_unique<ShadowNode>(rootHwnd));
+	m_rootTag = root->Tag();
+	DoLayout();
+}
+
+
+

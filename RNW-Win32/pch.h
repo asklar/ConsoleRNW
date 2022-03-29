@@ -27,6 +27,9 @@
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Microsoft.ReactNative.h>
+#include "JSValue.h"
+#include "ReactContext.h"
+#include "ReactPropertyBag.h"
 
 #include <functional>
 #include <chrono>
