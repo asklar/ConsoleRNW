@@ -3,12 +3,108 @@
 #include "Win32ReactRootView.h"
 #include <../yoga/yoga/YGNode.h>
 #include <../yoga/yoga/Yoga.h>
+#include <variant>
 
 namespace Mso {
     template<typename T>
     using Functor = std::function<T>;
 }
 void AssertTag(bool, DWORD);
+
+struct ShadowNode;
+struct IWin32ViewManager {
+    virtual ~IWin32ViewManager() = 0 {};
+    virtual HWND Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props) = 0;
+    virtual winrt::Microsoft::ReactNative::JSValueObject GetConstants() = 0;
+    virtual void UpdateProperties(int64_t reactTag, HWND hwnd, const winrt::Microsoft::ReactNative::JSValueObject& props) = 0;
+
+    static ShadowNode* GetShadowNode(HWND hwnd) {
+        return reinterpret_cast<ShadowNode*>(GetWindowLongPtrW(hwnd, 0));
+    }
+    static void SetShadowNode(HWND hwnd, ShadowNode* node) {
+        SetWindowLongPtrW(hwnd, 0, reinterpret_cast<LONG_PTR>(node));
+    }
+};
+
+struct YogaNodeDeleter {
+    void operator()(YGNodeRef node);
+};
+
+using YogaNodePtr = std::unique_ptr<YGNode, YogaNodeDeleter>;
+
+inline static YogaNodePtr make_yoga_node(YGConfigRef config) {
+    YogaNodePtr result(YGNodeNewWithConfig(config));
+    return result;
+}
+
+template<typename TPropertyEnum>
+struct PropertyStorage {
+    using PropertyTypes = std::variant<DWORD, float, std::string>;
+    std::array<std::optional<PropertyTypes>, static_cast<int>(TPropertyEnum::Last)> m_properties{};
+
+};
+
+
+enum class PropertyIndex {
+    Background,
+    Last,
+};
+
+template<typename TBackingType, PropertyIndex index>
+struct Property {
+    using type = TBackingType;
+    static std::optional<TBackingType> Get(PropertyStorage<PropertyIndex>& storage) {
+        const auto& v = storage.m_properties[static_cast<int>(index)];
+        if (v.has_value()) {
+            if (std::holds_alternative<TBackingType>(v.value())) {
+                return std::get<TBackingType>(v.value());
+            }
+        }
+        return std::nullopt;
+    }
+
+    static std::optional<TBackingType> Get(PropertyStorage<PropertyIndex>* storage) {
+        return Get(*storage);
+    }
+
+
+    static void Set(PropertyStorage<PropertyIndex>& storage, TBackingType value) {
+        storage.m_properties[static_cast<int>(index)] = value;
+    }
+
+    static void Set(PropertyStorage<PropertyIndex>* storage, TBackingType value) {
+        return Set(*storage, value);
+    }
+};
+
+struct ShadowNode : PropertyStorage<PropertyIndex> {
+    HWND window{};
+    YogaNodePtr yogaNode{};
+    ShadowNode(HWND w, YGConfigRef config) : window(w), yogaNode(make_yoga_node(config)) {
+
+    }
+    ~ShadowNode() {
+        DestroyWindow(window);
+    }
+    ShadowNode(const ShadowNode&) = delete;
+    ShadowNode(ShadowNode&&) = default;
+
+    bool ImplementsPadding() const noexcept { return false; }
+
+
+    using BackgroundProperty = Property<COLORREF, PropertyIndex::Background>;
+    
+    template<typename TProperty>
+    auto GetValue() {
+        return TProperty::Get(this);
+    }
+
+    template<typename TProperty>
+    void SetValue(const typename TProperty::type& value) {
+        TProperty::Set(this, value);
+    }
+};
+
 
 REACT_MODULE(PaperUIManager, L"UIManager")
 struct PaperUIManager final : std::enable_shared_from_this<PaperUIManager> {
@@ -160,30 +256,8 @@ struct PaperUIManager final : std::enable_shared_from_this<PaperUIManager> {
 private:
     winrt::Microsoft::ReactNative::ReactContext m_context;
 
-    struct YogaNodeDeleter {
-        void operator()(YGNodeRef node);
-    };
-
-    using YogaNodePtr = std::unique_ptr<YGNode, YogaNodeDeleter>;
-
-    static YogaNodePtr make_yoga_node(YGConfigRef config) {
-        YogaNodePtr result(YGNodeNewWithConfig(config));
-        return result;
-    }
 
     YGConfigRef m_yogaConfig{ YGConfigNew() };
-
-    struct ShadowNode {
-        HWND window{};
-        YogaNodePtr yogaNode{};
-        ShadowNode(HWND w, YGConfigRef config) : window(w), yogaNode(make_yoga_node(config)) {
-
-        }
-        ShadowNode(const ShadowNode&) = delete;
-        ShadowNode(ShadowNode&&) = default;
-
-        bool ImplementsPadding() const noexcept { return false; }
-    };
 
     std::map<int64_t, std::unique_ptr<ShadowNode>> m_nodes;
 
@@ -197,4 +271,6 @@ private:
         const winrt::Microsoft::ReactNative::JSValueObject& props);
 
     void DirtyYogaNode(int64_t tag);
+
+    std::unordered_map<std::string, std::unique_ptr<IWin32ViewManager>> m_viewManagers{};
 };

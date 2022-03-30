@@ -1,28 +1,25 @@
-import {AppRegistry, LogBox, View} from 'react-native';
-import React from 'react';
-
+import {AppRegistry, LogBox} from 'react-native';
 
 // We dont support showing UI -- so remove the LogBox
 LogBox.uninstall();
 
-// import {App} from './App';
+//import {App} from './App';
 
-class App  extends React.Component {
-
+import React from 'react';
+import {View} from 'react-native';
+class App extends React.Component {
   render() {
-    console.log("HELLO WORLD");
+    console.log('HELLO WORLD');
     nativeLoggingHook("************ I'm in render()", 0);
-    
+
     return (
-      <View style={{width: 400, height: 600}}/>
+      <View style={{width: 600, height: 600, backgroundColor: "green"}}>
+        <View style={{width: 100, height: 100, backgroundColor: "pink"}} />
+      </View>
     );
   }
 }
 
 import {name as appName} from './app.json';
 
-console.log("BEFORE");
 AppRegistry.registerComponent(appName, () => App);
-console.log("AFTER  ");
-
-nativeLoggingHook("FOO", 0);

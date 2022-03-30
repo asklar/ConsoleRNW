@@ -4,17 +4,12 @@
 void AssertTag(bool, DWORD) {}
 using namespace winrt::Microsoft::ReactNative;
 
-void PaperUIManager::YogaNodeDeleter::operator()(YGNodeRef node) {
+void YogaNodeDeleter::operator()(YGNodeRef node) {
 	YGNodeFree(node);
 }
 
 PaperUIManager::~PaperUIManager()
 {
-	if (m_context)
-	{
-		// To make sure that we destroy UI components in UI thread.
-		//m_context.UIDispatcher().Post([uiManager = std::move(m_uimanager)](){uiManager; });
-	}
 }
 
 #if defined(_DEBUG)
@@ -65,42 +60,131 @@ void PaperUIManager::Initialize(winrt::Microsoft::ReactNative::ReactContext cons
 }
 
 void PaperUIManager::ConstantsViaConstantsProvider(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept
-{
+{}
 
 
-}
+struct ViewViewManager : IWin32ViewManager {
+
+    enum class ClassIndex {
+        Background = 0,
+        Last,
+    };
+
+    ViewViewManager() {
+        WNDCLASSEX wcex{};
+        wcex.cbSize = sizeof(wcex);
+        wcex.style = CS_HREDRAW | CS_VREDRAW;
+        wcex.cbWndExtra = sizeof(void*);
+        wcex.hInstance = nullptr;
+        wcex.lpszClassName = L"RCTView";
+        
+        wcex.lpfnWndProc = ViewWndProc;
+        RegisterClassEx(&wcex);
+    }
+
+    static LRESULT __stdcall ViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+        auto node = GetShadowNode(hwnd);
+        switch (msg) {
+        case WM_PAINT: {
+            PAINTSTRUCT ps{};
+            auto dc = BeginPaint(hwnd, &ps);
+            RECT rc{};
+            GetClientRect(hwnd, &rc);
+            auto bkColor = node->GetValue<ShadowNode::BackgroundProperty>();
+            if (bkColor.has_value()) {
+                SetDCBrushColor(dc, bkColor.value());
+                FillRect(dc, &rc, (HBRUSH)GetStockObject(DC_BRUSH));
+            }
+            wchar_t str[100]{};
+            GetWindowText(hwnd, str, ARRAYSIZE(str));
+            auto bkOld = GetBkColor(dc);
+            {
+                SetBkColor(dc, bkColor.has_value() ? bkColor.value() : GetSysColor(COLOR_WINDOW));
+                DrawText(dc, str, wcslen(str), &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                SetBkColor(dc, bkOld);
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
+            break;
+        }
+        case WM_ERASEBKGND:
+            return 0; // handle background in WM_PAINT
+        default:
+            return DefWindowProc(hwnd, msg, wParam, lParam);
+        }
+    }
+
+    ~ViewViewManager() {
+        UnregisterClassW(L"RCTView", nullptr);
+    }
+
+    HWND Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props) {
+        auto tag = std::format(L"This is a View! its react tag is: {}", reactTag);
+        auto hwnd = CreateWindow(L"RCTView", tag.c_str(), WS_CHILD | WS_VISIBLE,
+            0, 0, 0, 0,
+            rootHWnd, nullptr, nullptr, nullptr);
+        return hwnd;
+    }
+
+    void UpdateProperties(int64_t reactTag, HWND hwnd, const winrt::Microsoft::ReactNative::JSValueObject& props) override {
+        auto node = GetShadowNode(hwnd);
+        for (const auto& v : props) {
+            const auto& propName = v.first;
+            const auto& value = v.second;
+
+            if (propName == "backgroundColor") {
+                auto rgb = value.AsUInt32() & 0x00ffffff; //ignore alpha
+                auto bkColor = RGB(rgb >> 16, (rgb >> 8) & 0xff, rgb & 0xff);
+                
+                node->SetValue<ShadowNode::BackgroundProperty>(bkColor);
+            }
+            else {
+                //DebugBreak();
+            }
+        }
+    }
+
+    JSValueObject GetConstants() {
+        auto view = JSValueObject{
+        {
+            { "Constants", JSValueObject{} },
+            { "Commands", JSValueObject{} },
+            { "NativeProps", JSValueObject{
+                { "onLayout", "function" },
+                { "pointerEvents", "string" },
+                { "onClick", "function" },
+                { "onMouseEnter", "function" },
+                { "onMouseLeave", "function" },
+                { "focusable", "boolean" },
+                { "enableFocusRing", "boolean" },
+                { "tabIndex", "number" },
+                //{ "background", "Color"},
+            } },
+            { "bubblingEventTypes", JSValueObject{
+            } },
+            { "directEventTypes", JSValueObject{} },
+        }
+        };
+        return view;
+    }
+};
 
 winrt::Microsoft::ReactNative::JSValueObject PaperUIManager::getConstantsForViewManager(std::string viewManagerName) noexcept
 {
-	//auto d = m_uimanager->getConstantsForViewManager(viewManagerName);
-	//auto writer = winrt::Microsoft::ReactNative::MakeJSValueTreeWriter();
-	//WriteValue(writer, d);
-	//return winrt::Microsoft::ReactNative::TakeJSValue(writer).MoveObject();
-	//return {};
+    if (m_viewManagers.count(viewManagerName) == 0) {
+        struct ViewManagerFactory {
+            std::string_view name;
+            std::unique_ptr<IWin32ViewManager>(*make)();
+        };
+        constexpr ViewManagerFactory viewMgrFactory[] = {
+            {  "RCTView", []() { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager); }}
+        };
+        const auto& entry = std::find_if(std::begin(viewMgrFactory), std::end(viewMgrFactory), [&viewManagerName](const auto& i) { return i.name == viewManagerName; });
+        m_viewManagers[viewManagerName] = entry->make();
+            
+    }
 
-
-	auto view = JSValueObject{
-	{
-		{ "Constants", JSValueObject{} },
-		{ "Commands", JSValueObject{} },
-		{ "NativeProps", JSValueObject{
-			{ "onLayout", "function" },
-			{ "pointerEvents", "string" },
-			{ "onClick", "function" },
-			{ "onMouseEnter", "function" },
-			{ "onMouseLeave", "function" },
-			{ "focusable", "boolean" },
-			{ "enableFocusRing", "boolean" },
-			{ "tabIndex", "number" },
-		} },
-		{ "bubblingEventTypes", JSValueObject{
-		} },
-		{ "directEventTypes", JSValueObject{} },
-	}
-	};
-	return view;
-//	constants.Add(L"RCTView", view);
-
+    return m_viewManagers[viewManagerName]->GetConstants();
 }
 
 // Not part of the spec, but core polyfils this on the JS side.
@@ -801,36 +885,35 @@ void PaperUIManager::createView(
 	double rootTag,
 	winrt::Microsoft::ReactNative::JSValueObject&& props) noexcept
 {
-	winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
-		[this, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), rootTag = static_cast<int64_t>(rootTag), props = std::move(props)]() mutable
-	{
-		if (viewName == "RCTView") {
-            auto tag = std::format(L"This is a View! its react tag is: {}", reactTag);
-			auto hwnd = CreateWindow(L"Static", tag.c_str(), WS_CHILD | WS_VISIBLE, 
-				0, 0, 0, 0, 
-				TagToHWND(rootTag), nullptr, nullptr, nullptr);
-            SetPropW(hwnd, L"Tag", (HANDLE)reactTag);
-			auto result = m_nodes.emplace(reactTag, std::make_unique<ShadowNode>(hwnd, m_yogaConfig));
-            if (result.second) {
-                auto shadowNode = result.first->second.get();
-                StyleYogaNode(*shadowNode, shadowNode->yogaNode.get(), props);
-                /*
-                YGMeasureFunc func = pViewManager->GetYogaCustomMeasureFunc();
-                if (func != nullptr) {
-                    YGNodeSetMeasureFunc(yogaNode, func);
+    winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
+        [this, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), rootTag = static_cast<int64_t>(rootTag), props = std::move(props)]() mutable
+    {
+        auto hwnd = m_viewManagers[viewName]->Create(reactTag, rootTag, TagToHWND(rootTag), props);
+        SetPropW(hwnd, L"Tag", (HANDLE)reactTag);
+        auto result = m_nodes.emplace(reactTag, std::make_unique<ShadowNode>(hwnd, m_yogaConfig));
+        if (result.second) {
+            auto shadowNode = result.first->second.get();
+            SetWindowLongPtrW(hwnd, 0, reinterpret_cast<LONG_PTR>(shadowNode));
 
-                    auto context = std::make_unique<Microsoft::ReactNative::YogaContext>(node.GetView());
-                    YGNodeSetContext(yogaNode, reinterpret_cast<void*>(context.get()));
-                }
-                */
-			}
-		}
-	});
+            StyleYogaNode(*shadowNode, shadowNode->yogaNode.get(), props);
+            /*
+            YGMeasureFunc func = pViewManager->GetYogaCustomMeasureFunc();
+            if (func != nullptr) {
+                YGNodeSetMeasureFunc(yogaNode, func);
+
+                auto context = std::make_unique<Microsoft::ReactNative::YogaContext>(node.GetView());
+                YGNodeSetContext(yogaNode, reinterpret_cast<void*>(context.get()));
+            }
+            */
+        }
+        m_viewManagers[viewName]->UpdateProperties(reactTag, hwnd, props);
+    });
 	
 }
 
 void PaperUIManager::updateView(double reactTag, std::string viewName, winrt::Microsoft::ReactNative::JSValueObject&& props) noexcept
 {
+    m_viewManagers[viewName]->UpdateProperties(reactTag, m_nodes[reactTag]->window, props);
 	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
 	//	[uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), props = std::move(props)]() mutable
 	//{
@@ -893,7 +976,7 @@ void PaperUIManager::measure(
 	double reactTag,
 	Mso::Functor<void(double left, double top, double width, double height, double pageX, double pageY)> const& callback) noexcept
 {
-	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [context = m_context, uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), callback = std::move(callback)]() mutable
+	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [context = m_context, reactTag = static_cast<int64_t>(reactTag), callback = std::move(callback)]() mutable
 	//{
 	//	uimanager->measure(reactTag, [context = std::move(context), callback = std::move(callback)](double left, double top, double width, double height, double pageX, double pageY) noexcept
 	//	{
@@ -906,7 +989,7 @@ void PaperUIManager::measureInWindow(
 	double reactTag,
 	Mso::Functor<void(double x, double y, double width, double height)> const& callback) noexcept
 {
-	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [context = m_context, uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), callback = std::move(callback)]() mutable
+ 	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [context = m_context, uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), callback = std::move(callback)]() mutable
 	//{
 	//	uimanager->measureInWindow(reactTag, [context = std::move(context), callback = std::move(callback)](double left, double top, double width, double height) noexcept
 	//	{
