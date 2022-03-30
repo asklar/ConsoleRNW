@@ -27,7 +27,6 @@ winrt::Microsoft::ReactNative::ReactContext g_context;
 uint32_t reloadCount{ 1 };
 bool g_exit{ false };
 
-
 // Work around crash in DeviceInfo when running outside of XAML environment
 REACT_MODULE(DeviceInfo)
 struct DeviceInfo {

@@ -1,0 +1,72 @@
+commit be8a8a8b77c9a2d4137f8cad00f76c8120e29f1a
+Author: Andrew Coates <30809111+acoates-ms@users.noreply.github.com>
+Date:   Thu Feb 10 13:58:45 2022 -0800
+
+    Built in turbomodules should not override app provided versions (#9519)
+    
+    * Built in turbomodules should not override app provided versions
+    
+    * Change files
+
+diff --git a/example/node_modules/react-native-windows/Microsoft.ReactNative/ReactHost/ReactInstanceWin.cpp b/example/node_modules/react-native-windows/Microsoft.ReactNative/ReactHost/ReactInstanceWin.cpp
+index 2691c5ce0..1be677216 100644
+--- a/example/node_modules/react-native-windows/Microsoft.ReactNative/ReactHost/ReactInstanceWin.cpp
++++ b/example/node_modules/react-native-windows/Microsoft.ReactNative/ReactHost/ReactInstanceWin.cpp
+@@ -258,7 +258,7 @@ void ReactInstanceWin::LoadModules(
+     if (m_options.UseWebDebugger()) {
+       nativeModulesProvider->AddModuleProvider(name, provider);
+     } else {
+-      turboModulesProvider->AddModuleProvider(name, provider);
++      turboModulesProvider->AddModuleProvider(name, provider, false);
+     }
+   };
+ 
+diff --git a/example/node_modules/react-native-windows/Microsoft.ReactNative/ReactPackageBuilder.cpp b/example/node_modules/react-native-windows/Microsoft.ReactNative/ReactPackageBuilder.cpp
+index dd52e2637..6db8b5513 100644
+--- a/example/node_modules/react-native-windows/Microsoft.ReactNative/ReactPackageBuilder.cpp
++++ b/example/node_modules/react-native-windows/Microsoft.ReactNative/ReactPackageBuilder.cpp
+@@ -38,7 +38,7 @@ void ReactPackageBuilder::AddViewManager(
+ void ReactPackageBuilder::AddTurboModule(
+     hstring const &moduleName,
+     ReactModuleProvider const &moduleProvider) noexcept {
+-  m_turboModulesProvider->AddModuleProvider(moduleName, moduleProvider);
++  m_turboModulesProvider->AddModuleProvider(moduleName, moduleProvider, true);
+ }
+ 
+ } // namespace winrt::Microsoft::ReactNative
+diff --git a/example/node_modules/react-native-windows/Microsoft.ReactNative/TurboModulesProvider.cpp b/example/node_modules/react-native-windows/Microsoft.ReactNative/TurboModulesProvider.cpp
+index cf561f628..1a3f2c3f5 100644
+--- a/example/node_modules/react-native-windows/Microsoft.ReactNative/TurboModulesProvider.cpp
++++ b/example/node_modules/react-native-windows/Microsoft.ReactNative/TurboModulesProvider.cpp
+@@ -335,12 +335,13 @@ void TurboModulesProvider::SetReactContext(const IReactContext &reactContext) no
+ 
+ void TurboModulesProvider::AddModuleProvider(
+     winrt::hstring const &moduleName,
+-    ReactModuleProvider const &moduleProvider) noexcept {
++    ReactModuleProvider const &moduleProvider,
++    bool overwriteExisting) noexcept {
+   auto key = to_string(moduleName);
+   auto it = m_moduleProviders.find(key);
+   if (it == m_moduleProviders.end()) {
+     m_moduleProviders.insert({key, moduleProvider});
+-  } else {
++  } else if (overwriteExisting) {
+     // turbo modules should be replaceable before the first time it is requested
+     it->second = moduleProvider;
+   }
+diff --git a/example/node_modules/react-native-windows/Microsoft.ReactNative/TurboModulesProvider.h b/example/node_modules/react-native-windows/Microsoft.ReactNative/TurboModulesProvider.h
+index 4f9a5b05e..a82e6a2b4 100644
+--- a/example/node_modules/react-native-windows/Microsoft.ReactNative/TurboModulesProvider.h
++++ b/example/node_modules/react-native-windows/Microsoft.ReactNative/TurboModulesProvider.h
+@@ -26,7 +26,10 @@ class TurboModulesProvider final : public facebook::react::TurboModuleRegistry {
+ 
+  public:
+   void SetReactContext(const IReactContext &reactContext) noexcept;
+-  void AddModuleProvider(winrt::hstring const &moduleName, ReactModuleProvider const &moduleProvider) noexcept;
++  void AddModuleProvider(
++      winrt::hstring const &moduleName,
++      ReactModuleProvider const &moduleProvider,
++      bool overwriteExisting) noexcept;
+ 
+  private:
+   std::unordered_map<std::string, ReactModuleProvider> m_moduleProviders;

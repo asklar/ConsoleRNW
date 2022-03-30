@@ -166,20 +166,35 @@ private:
 
     using YogaNodePtr = std::unique_ptr<YGNode, YogaNodeDeleter>;
 
+    static YogaNodePtr make_yoga_node(YGConfigRef config) {
+        YogaNodePtr result(YGNodeNewWithConfig(config));
+        return result;
+    }
+
+    YGConfigRef m_yogaConfig{ YGConfigNew() };
+
     struct ShadowNode {
         HWND window{};
         YogaNodePtr yogaNode{};
-        ShadowNode(HWND w) : window(w), yogaNode(new YGNode{}) {
+        ShadowNode(HWND w, YGConfigRef config) : window(w), yogaNode(make_yoga_node(config)) {
 
         }
         ShadowNode(const ShadowNode&) = delete;
         ShadowNode(ShadowNode&&) = default;
+
+        bool ImplementsPadding() const noexcept { return false; }
     };
 
     std::map<int64_t, std::unique_ptr<ShadowNode>> m_nodes;
 
     HWND TagToHWND(int64_t);
+    int64_t HWNDToTag(HWND hwnd);
     int64_t m_rootTag{};
 
+    static void StyleYogaNode(
+        ShadowNode& shadowNode,
+        const YGNodeRef yogaNode,
+        const winrt::Microsoft::ReactNative::JSValueObject& props);
 
+    void DirtyYogaNode(int64_t tag);
 };

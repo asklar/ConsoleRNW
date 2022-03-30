@@ -17,11 +17,50 @@ PaperUIManager::~PaperUIManager()
 	}
 }
 
+#if defined(_DEBUG)
+static int YogaLog(
+	const YGConfigRef /*config*/,
+	const YGNodeRef /*node*/,
+	YGLogLevel /*level*/,
+	const char* format,
+	va_list args) {
+	int len = _scprintf(format, args);
+	std::string buffer(len + 1, '\0');
+	vsnprintf_s(&buffer[0], len + 1, _TRUNCATE, format, args);
+	buffer.resize(len);
+
+	// OutputDebugString will truncate output around 4k, here
+	// we output a 1000 characters at a time.
+	int start = 0;
+	while (len - start > 1000) {
+		char tmp = buffer[start + 1000];
+		buffer[start + 1000] = '\0';
+		OutputDebugStringA(&buffer[start]);
+		buffer[start + 1000] = tmp;
+		start += 1000;
+	}
+	OutputDebugStringA(&buffer[start]);
+	OutputDebugStringA("\n");
+
+	return 0;
+}
+#endif
+
 void PaperUIManager::Initialize(winrt::Microsoft::ReactNative::ReactContext const& reactContext) noexcept
 {
 	m_context = reactContext;
 	winrt::Microsoft::ReactNative::ReactPropertyBag(m_context.Properties())
 		.Set(PaperUIManager::UIManagerProperty(), this);
+
+#if defined(_DEBUG)
+	YGConfigSetLogger(m_yogaConfig, &YogaLog);
+
+	// To Debug Yoga layout, uncomment the following line.
+	// YGConfigSetPrintTreeFlag(m_yogaConfig, true);
+
+	// Additional logging can be enabled editing yoga.cpp (e.g. gPrintChanges,
+	// gPrintSkips)
+#endif
 
 }
 
@@ -84,6 +123,35 @@ winrt::Microsoft::ReactNative::JSValueObject PaperUIManager::lazilyLoadView(std:
 
 void PaperUIManager::onBatchCompleted() noexcept {
 	DoLayout();
+}
+
+
+void PaperUIManager::DirtyYogaNode(int64_t tag) {
+    auto& pShadowNodeChild = m_nodes[tag];
+    if (pShadowNodeChild != nullptr) {
+        /*
+        auto* pViewManager = pShadowNodeChild->GetViewManager();
+        YGMeasureFunc func = pViewManager->GetYogaCustomMeasureFunc();
+        if (func != nullptr) {
+            // If there is a yoga node for this tag mark it as dirty
+            YGNodeRef yogaNodeChild = GetYogaNode(tag);
+            if (yogaNodeChild != nullptr) {
+                // Retrieve and dirty the yoga node
+                YGNodeMarkDirty(yogaNodeChild);
+
+                // Once we mark a node dirty we can stop because the yoga code will mark
+                // all parents anyway
+                return;
+            }
+        }
+
+        // Since this node didn't meet the criteria, jump to parent in case it does
+        int64_t parentTag = pShadowNodeChild->GetParent();
+        if (parentTag >= 0)
+            DirtyYogaNode(parentTag);
+
+            */
+    }
 }
 
 void PaperUIManager::UpdateExtraLayout(int64_t tag) {
@@ -172,6 +240,561 @@ void PaperUIManager::DoLayout() {
 
 }
 
+static float NumberOrDefault(const winrt::Microsoft::ReactNative::JSValue& value, float defaultValue) {
+    float result = defaultValue;
+
+    if (value.Type() == winrt::Microsoft::ReactNative::JSValueType::Double ||
+        value.Type() == winrt::Microsoft::ReactNative::JSValueType::Int64)
+        result = value.AsSingle();
+    else if (value.IsNull())
+        result = defaultValue;
+    else if (value.Type() == winrt::Microsoft::ReactNative::JSValueType::String)
+        result = std::stof(value.AsString());
+    else
+        assert(false);
+
+    return result;
+}
+
+template<typename T>
+static YGValue YGValueOrDefault(
+    const winrt::Microsoft::ReactNative::JSValue& value,
+    YGValue defaultValue,
+    const T& /*unused*/,
+    const std::string& key) {
+    YGValue result = defaultValue;
+
+    if (value.Type() == winrt::Microsoft::ReactNative::JSValueType::Double ||
+        value.Type() == winrt::Microsoft::ReactNative::JSValueType::Int64)
+        return YGValue{ value.AsSingle(), YGUnitPoint };
+
+    if (value.IsNull())
+        return defaultValue;
+
+    if (value.Type() == winrt::Microsoft::ReactNative::JSValueType::String) {
+        std::string str = value.AsString();
+        if (str == "auto")
+            return YGValue{ YGUndefined, YGUnitAuto };
+        if (str.length() > 0 && str.back() == '%') {
+            str.pop_back();
+            float pct{};
+            auto p = std::atof(str.c_str());
+            return YGValue{ pct, YGUnitPercent };
+        }
+        if (str.length() > 2 && (str.compare(str.length() - 2, 2, "pt") || str.compare(str.length() - 2, 2, "px"))) {
+            std::string error = std::format("Value '{}' for {} is invalid. Cannot be converted to YGValue. '{}' unit not needed. Simply use integer value.\n",
+                value.AsString(),
+                key,
+                str.substr((str.length() - 2), 2));
+            OutputDebugStringA(error.c_str());
+            return defaultValue;
+        }
+    }
+
+    std::string error = std::format("Value '{}'  for {} is invalid. Cannot be converted to YGValue. Did you forget the %? Otherwise, simply use integer value.\n", value.AsString(), key);
+    OutputDebugStringA(error.c_str());
+    return defaultValue;
+}
+
+typedef void (*YogaSetterFunc)(const YGNodeRef yogaNode, const YGEdge edge, const float value);
+static void SetYogaValueHelper(
+    const YGNodeRef yogaNode,
+    const YGEdge edge,
+    const YGValue& value,
+    YogaSetterFunc normalSetter,
+    YogaSetterFunc percentSetter) {
+    switch (value.unit) {
+    case YGUnitAuto:
+    case YGUnitUndefined:
+        normalSetter(yogaNode, edge, YGUndefined);
+        break;
+    case YGUnitPoint:
+        normalSetter(yogaNode, edge, value.value);
+        break;
+    case YGUnitPercent:
+        percentSetter(yogaNode, edge, value.value);
+        break;
+    }
+}
+
+typedef void (*YogaUnitSetterFunc)(const YGNodeRef yogaNode, const float value);
+static void SetYogaUnitValueHelper(
+    const YGNodeRef yogaNode,
+    const YGValue& value,
+    YogaUnitSetterFunc normalSetter,
+    YogaUnitSetterFunc percentSetter) {
+    switch (value.unit) {
+    case YGUnitAuto:
+    case YGUnitUndefined:
+        normalSetter(yogaNode, YGUndefined);
+        break;
+    case YGUnitPoint:
+        normalSetter(yogaNode, value.value);
+        break;
+    case YGUnitPercent:
+        percentSetter(yogaNode, value.value);
+        break;
+    }
+}
+
+typedef void (*YogaAutoUnitSetterFunc)(const YGNodeRef yogaNode);
+static void SetYogaUnitValueAutoHelper(
+    const YGNodeRef yogaNode,
+    const YGValue& value,
+    YogaUnitSetterFunc normalSetter,
+    YogaUnitSetterFunc percentSetter,
+    YogaAutoUnitSetterFunc autoSetter) {
+    switch (value.unit) {
+    case YGUnitAuto:
+        autoSetter(yogaNode);
+        break;
+    case YGUnitUndefined:
+        normalSetter(yogaNode, YGUndefined);
+        break;
+    case YGUnitPoint:
+        normalSetter(yogaNode, value.value);
+        break;
+    case YGUnitPercent:
+        percentSetter(yogaNode, value.value);
+        break;
+    }
+}
+
+typedef void (*YogaAutoSetterFunc)(const YGNodeRef yogaNode, const YGEdge edge);
+static void SetYogaValueAutoHelper(
+    const YGNodeRef yogaNode,
+    const YGEdge edge,
+    const YGValue& value,
+    YogaSetterFunc normalSetter,
+    YogaSetterFunc percentSetter,
+    YogaAutoSetterFunc autoSetter) {
+    switch (value.unit) {
+    case YGUnitAuto:
+        autoSetter(yogaNode, edge);
+        break;
+    case YGUnitUndefined:
+        normalSetter(yogaNode, edge, YGUndefined);
+        break;
+    case YGUnitPoint:
+        normalSetter(yogaNode, edge, value.value);
+        break;
+    case YGUnitPercent:
+        percentSetter(yogaNode, edge, value.value);
+        break;
+    }
+}
+
+
+/*static*/ void PaperUIManager::StyleYogaNode(
+    ShadowNode& shadowNode,
+    const YGNodeRef yogaNode,
+    const winrt::Microsoft::ReactNative::JSValueObject& props) {
+    for (const auto& pair : props) {
+        const std::string& key = pair.first;
+        const auto& value = pair.second;
+
+        if (key == "flexDirection") {
+            YGFlexDirection direction = YGFlexDirectionColumn;
+
+            if (value == "column" || value.IsNull())
+                direction = YGFlexDirectionColumn;
+            else if (value == "row")
+                direction = YGFlexDirectionRow;
+            else if (value == "column-reverse")
+                direction = YGFlexDirectionColumnReverse;
+            else if (value == "row-reverse")
+                direction = YGFlexDirectionRowReverse;
+            else
+                assert(false);
+
+            YGNodeStyleSetFlexDirection(yogaNode, direction);
+        }
+        else if (key == "justifyContent") {
+            YGJustify justify = YGJustifyFlexStart;
+
+            if (value == "flex-start" || value.IsNull())
+                justify = YGJustifyFlexStart;
+            else if (value == "flex-end")
+                justify = YGJustifyFlexEnd;
+            else if (value == "center")
+                justify = YGJustifyCenter;
+            else if (value == "space-between")
+                justify = YGJustifySpaceBetween;
+            else if (value == "space-around")
+                justify = YGJustifySpaceAround;
+            else if (value == "space-evenly")
+                justify = YGJustifySpaceEvenly;
+            else
+                assert(false);
+
+            YGNodeStyleSetJustifyContent(yogaNode, justify);
+        }
+        else if (key == "flexWrap") {
+            YGWrap wrap = YGWrapNoWrap;
+
+            if (value == "nowrap" || value.IsNull())
+                wrap = YGWrapNoWrap;
+            else if (value == "wrap")
+                wrap = YGWrapWrap;
+            else
+                assert(false);
+
+            YGNodeStyleSetFlexWrap(yogaNode, wrap);
+        }
+        else if (key == "alignItems") {
+            YGAlign align = YGAlignStretch;
+
+            if (value == "stretch" || value.IsNull())
+                align = YGAlignStretch;
+            else if (value == "flex-start")
+                align = YGAlignFlexStart;
+            else if (value == "flex-end")
+                align = YGAlignFlexEnd;
+            else if (value == "center")
+                align = YGAlignCenter;
+            else if (value == "baseline")
+                align = YGAlignBaseline;
+            else
+                assert(false);
+
+            YGNodeStyleSetAlignItems(yogaNode, align);
+        }
+        else if (key == "alignSelf") {
+            YGAlign align = YGAlignAuto;
+
+            if (value == "auto" || value.IsNull())
+                align = YGAlignAuto;
+            else if (value == "stretch")
+                align = YGAlignStretch;
+            else if (value == "flex-start")
+                align = YGAlignFlexStart;
+            else if (value == "flex-end")
+                align = YGAlignFlexEnd;
+            else if (value == "center")
+                align = YGAlignCenter;
+            else if (value == "baseline")
+                align = YGAlignBaseline;
+            else
+                assert(false);
+
+            YGNodeStyleSetAlignSelf(yogaNode, align);
+        }
+        else if (key == "alignContent") {
+            YGAlign align = YGAlignFlexStart;
+
+            if (value == "stretch")
+                align = YGAlignStretch;
+            else if (value == "flex-start" || value.IsNull())
+                align = YGAlignFlexStart;
+            else if (value == "flex-end")
+                align = YGAlignFlexEnd;
+            else if (value == "center")
+                align = YGAlignCenter;
+            else if (value == "space-between")
+                align = YGAlignSpaceBetween;
+            else if (value == "space-around")
+                align = YGAlignSpaceAround;
+            else
+                assert(false);
+
+            YGNodeStyleSetAlignContent(yogaNode, align);
+        }
+        else if (key == "flex") {
+            float result = NumberOrDefault(value, 0.0f /*default*/);
+
+            YGNodeStyleSetFlex(yogaNode, result);
+        }
+        else if (key == "flexGrow") {
+            float result = NumberOrDefault(value, 0.0f /*default*/);
+
+            YGNodeStyleSetFlexGrow(yogaNode, result);
+        }
+        else if (key == "flexShrink") {
+            float result = NumberOrDefault(value, 0.0f /*default*/);
+
+            YGNodeStyleSetFlexShrink(yogaNode, result);
+        }
+        else if (key == "flexBasis") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaUnitValueAutoHelper(
+                yogaNode, result, YGNodeStyleSetFlexBasis, YGNodeStyleSetFlexBasisPercent, YGNodeStyleSetFlexBasisAuto);
+        }
+        else if (key == "position") {
+            YGPositionType position = YGPositionTypeRelative;
+
+            if (value == "relative" || value.IsNull())
+                position = YGPositionTypeRelative;
+            else if (value == "absolute")
+                position = YGPositionTypeAbsolute;
+            else if (value == "static")
+                position = YGPositionTypeStatic;
+            else
+                assert(false);
+
+            YGNodeStyleSetPositionType(yogaNode, position);
+        }
+        else if (key == "overflow") {
+            YGOverflow overflow = YGOverflowVisible;
+            if (value == "visible" || value.IsNull())
+                overflow = YGOverflowVisible;
+            else if (value == "hidden")
+                overflow = YGOverflowHidden;
+            else if (value == "scroll")
+                overflow = YGOverflowScroll;
+
+            YGNodeStyleSetOverflow(yogaNode, overflow);
+        }
+        else if (key == "display") {
+            YGDisplay display = YGDisplayFlex;
+            if (value == "flex" || value.IsNull())
+                display = YGDisplayFlex;
+            else if (value == "none")
+                display = YGDisplayNone;
+
+            YGNodeStyleSetDisplay(yogaNode, display);
+        }
+        else if (key == "direction") {
+            // https://github.com/microsoft/react-native-windows/issues/4668
+            // In order to support the direction property, we tell yoga to always layout
+            // in LTR direction, then push the appropriate FlowDirection into XAML.
+            // This way XAML handles flipping in RTL mode, which works both for RN components
+            // as well as native components that have purely XAML sub-trees (eg ComboBox).
+            YGDirection direction = YGDirectionLTR;
+
+            YGNodeStyleSetDirection(yogaNode, direction);
+        }
+        else if (key == "aspectRatio") {
+            float result = NumberOrDefault(value, 1.0f /*default*/);
+
+            YGNodeStyleSetAspectRatio(yogaNode, result);
+        }
+        else if (key == "left") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueHelper(yogaNode, YGEdgeLeft, result, YGNodeStyleSetPosition, YGNodeStyleSetPositionPercent);
+        }
+        else if (key == "top") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueHelper(yogaNode, YGEdgeTop, result, YGNodeStyleSetPosition, YGNodeStyleSetPositionPercent);
+        }
+        else if (key == "right") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueHelper(yogaNode, YGEdgeRight, result, YGNodeStyleSetPosition, YGNodeStyleSetPositionPercent);
+        }
+        else if (key == "bottom") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueHelper(yogaNode, YGEdgeBottom, result, YGNodeStyleSetPosition, YGNodeStyleSetPositionPercent);
+        }
+        else if (key == "end") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueHelper(yogaNode, YGEdgeEnd, result, YGNodeStyleSetPosition, YGNodeStyleSetPositionPercent);
+        }
+        else if (key == "start") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueHelper(yogaNode, YGEdgeStart, result, YGNodeStyleSetPosition, YGNodeStyleSetPositionPercent);
+        }
+        else if (key == "width") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaUnitValueAutoHelper(
+                yogaNode, result, YGNodeStyleSetWidth, YGNodeStyleSetWidthPercent, YGNodeStyleSetWidthAuto);
+        }
+        else if (key == "minWidth") {
+            YGValue result = YGValueOrDefault(value, YGValue{ 0.0f, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaUnitValueHelper(yogaNode, result, YGNodeStyleSetMinWidth, YGNodeStyleSetMinWidthPercent);
+        }
+        else if (key == "maxWidth") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaUnitValueHelper(yogaNode, result, YGNodeStyleSetMaxWidth, YGNodeStyleSetMaxWidthPercent);
+        }
+        else if (key == "height") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaUnitValueAutoHelper(
+                yogaNode, result, YGNodeStyleSetHeight, YGNodeStyleSetHeightPercent, YGNodeStyleSetHeightAuto);
+        }
+        else if (key == "minHeight") {
+            YGValue result = YGValueOrDefault(value, YGValue{ 0.0f, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaUnitValueHelper(yogaNode, result, YGNodeStyleSetMinHeight, YGNodeStyleSetMinHeightPercent);
+        }
+        else if (key == "maxHeight") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaUnitValueHelper(yogaNode, result, YGNodeStyleSetMaxHeight, YGNodeStyleSetMaxHeightPercent);
+        }
+        else if (key == "margin") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueAutoHelper(
+                yogaNode, YGEdgeAll, result, YGNodeStyleSetMargin, YGNodeStyleSetMarginPercent, YGNodeStyleSetMarginAuto);
+        }
+        else if (key == "marginLeft") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueAutoHelper(
+                yogaNode, YGEdgeLeft, result, YGNodeStyleSetMargin, YGNodeStyleSetMarginPercent, YGNodeStyleSetMarginAuto);
+        }
+        else if (key == "marginStart") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueAutoHelper(
+                yogaNode, YGEdgeStart, result, YGNodeStyleSetMargin, YGNodeStyleSetMarginPercent, YGNodeStyleSetMarginAuto);
+        }
+        else if (key == "marginTop") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueAutoHelper(
+                yogaNode, YGEdgeTop, result, YGNodeStyleSetMargin, YGNodeStyleSetMarginPercent, YGNodeStyleSetMarginAuto);
+        }
+        else if (key == "marginRight") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueAutoHelper(
+                yogaNode, YGEdgeRight, result, YGNodeStyleSetMargin, YGNodeStyleSetMarginPercent, YGNodeStyleSetMarginAuto);
+        }
+        else if (key == "marginEnd") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueAutoHelper(
+                yogaNode, YGEdgeEnd, result, YGNodeStyleSetMargin, YGNodeStyleSetMarginPercent, YGNodeStyleSetMarginAuto);
+        }
+        else if (key == "marginBottom") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueAutoHelper(
+                yogaNode, YGEdgeBottom, result, YGNodeStyleSetMargin, YGNodeStyleSetMarginPercent, YGNodeStyleSetMarginAuto);
+        }
+        else if (key == "marginHorizontal") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueAutoHelper(
+                yogaNode,
+                YGEdgeHorizontal,
+                result,
+                YGNodeStyleSetMargin,
+                YGNodeStyleSetMarginPercent,
+                YGNodeStyleSetMarginAuto);
+        }
+        else if (key == "marginVertical") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueAutoHelper(
+                yogaNode,
+                YGEdgeVertical,
+                result,
+                YGNodeStyleSetMargin,
+                YGNodeStyleSetMarginPercent,
+                YGNodeStyleSetMarginAuto);
+        }
+        else if (key == "padding") {
+            if (!shadowNode.ImplementsPadding()) {
+                YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+                SetYogaValueHelper(yogaNode, YGEdgeAll, result, YGNodeStyleSetPadding, YGNodeStyleSetPaddingPercent);
+            }
+        }
+        else if (key == "paddingLeft") {
+            if (!shadowNode.ImplementsPadding()) {
+                YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+                SetYogaValueHelper(yogaNode, YGEdgeLeft, result, YGNodeStyleSetPadding, YGNodeStyleSetPaddingPercent);
+            }
+        }
+        else if (key == "paddingStart") {
+            if (!shadowNode.ImplementsPadding()) {
+                YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+                SetYogaValueHelper(yogaNode, YGEdgeStart, result, YGNodeStyleSetPadding, YGNodeStyleSetPaddingPercent);
+            }
+        }
+        else if (key == "paddingTop") {
+            if (!shadowNode.ImplementsPadding()) {
+                YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+                SetYogaValueHelper(yogaNode, YGEdgeTop, result, YGNodeStyleSetPadding, YGNodeStyleSetPaddingPercent);
+            }
+        }
+        else if (key == "paddingRight") {
+            YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+            SetYogaValueHelper(yogaNode, YGEdgeRight, result, YGNodeStyleSetPadding, YGNodeStyleSetPaddingPercent);
+        }
+        else if (key == "paddingEnd") {
+            if (!shadowNode.ImplementsPadding()) {
+                YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+                SetYogaValueHelper(yogaNode, YGEdgeEnd, result, YGNodeStyleSetPadding, YGNodeStyleSetPaddingPercent);
+            }
+        }
+        else if (key == "paddingBottom") {
+            if (!shadowNode.ImplementsPadding()) {
+                YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+                SetYogaValueHelper(yogaNode, YGEdgeBottom, result, YGNodeStyleSetPadding, YGNodeStyleSetPaddingPercent);
+            }
+        }
+        else if (key == "paddingHorizontal") {
+            if (!shadowNode.ImplementsPadding()) {
+                YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+                SetYogaValueHelper(yogaNode, YGEdgeHorizontal, result, YGNodeStyleSetPadding, YGNodeStyleSetPaddingPercent);
+            }
+        }
+        else if (key == "paddingVertical") {
+            if (!shadowNode.ImplementsPadding()) {
+                YGValue result = YGValueOrDefault(value, YGValue{ YGUndefined, YGUnitPoint } /*default*/, shadowNode, key);
+
+                SetYogaValueHelper(yogaNode, YGEdgeVertical, result, YGNodeStyleSetPadding, YGNodeStyleSetPaddingPercent);
+            }
+        }
+        else if (key == "borderWidth") {
+            float result = NumberOrDefault(value, 0.0f /*default*/);
+
+            YGNodeStyleSetBorder(yogaNode, YGEdgeAll, result);
+        }
+        else if (key == "borderLeftWidth") {
+            float result = NumberOrDefault(value, 0.0f /*default*/);
+
+            YGNodeStyleSetBorder(yogaNode, YGEdgeLeft, result);
+        }
+        else if (key == "borderStartWidth") {
+            float result = NumberOrDefault(value, 0.0f /*default*/);
+
+            YGNodeStyleSetBorder(yogaNode, YGEdgeStart, result);
+        }
+        else if (key == "borderTopWidth") {
+            float result = NumberOrDefault(value, 0.0f /*default*/);
+
+            YGNodeStyleSetBorder(yogaNode, YGEdgeTop, result);
+        }
+        else if (key == "borderRightWidth") {
+            float result = NumberOrDefault(value, 0.0f /*default*/);
+
+            YGNodeStyleSetBorder(yogaNode, YGEdgeRight, result);
+        }
+        else if (key == "borderEndWidth") {
+            float result = NumberOrDefault(value, 0.0f /*default*/);
+
+            YGNodeStyleSetBorder(yogaNode, YGEdgeEnd, result);
+        }
+        else if (key == "borderBottomWidth") {
+            float result = NumberOrDefault(value, 0.0f /*default*/);
+
+            YGNodeStyleSetBorder(yogaNode, YGEdgeBottom, result);
+        }
+    }
+}
+
+
 void PaperUIManager::createView(
 	double reactTag, // How come these cannot be int64_t?
 	std::string viewName,
@@ -182,12 +805,25 @@ void PaperUIManager::createView(
 		[this, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), rootTag = static_cast<int64_t>(rootTag), props = std::move(props)]() mutable
 	{
 		if (viewName == "RCTView") {
-			auto tag = std::to_wstring(reactTag);
+            auto tag = std::format(L"This is a View! its react tag is: {}", reactTag);
 			auto hwnd = CreateWindow(L"Static", tag.c_str(), WS_CHILD | WS_VISIBLE, 
 				0, 0, 0, 0, 
 				TagToHWND(rootTag), nullptr, nullptr, nullptr);
-			
-			m_nodes.emplace(reactTag, std::make_unique<ShadowNode>(hwnd));
+            SetPropW(hwnd, L"Tag", (HANDLE)reactTag);
+			auto result = m_nodes.emplace(reactTag, std::make_unique<ShadowNode>(hwnd, m_yogaConfig));
+            if (result.second) {
+                auto shadowNode = result.first->second.get();
+                StyleYogaNode(*shadowNode, shadowNode->yogaNode.get(), props);
+                /*
+                YGMeasureFunc func = pViewManager->GetYogaCustomMeasureFunc();
+                if (func != nullptr) {
+                    YGNodeSetMeasureFunc(yogaNode, func);
+
+                    auto context = std::make_unique<Microsoft::ReactNative::YogaContext>(node.GetView());
+                    YGNodeSetContext(yogaNode, reinterpret_cast<void*>(context.get()));
+                }
+                */
+			}
 		}
 	});
 	
@@ -365,6 +1001,10 @@ void PaperUIManager::removeRootView(double reactTag) noexcept
 	//});
 }
 
+int64_t PaperUIManager::HWNDToTag(HWND hwnd) {
+    return (int64_t)GetProp(hwnd, L"Tag");
+}
+
 HWND PaperUIManager::TagToHWND(int64_t tag) {
 	return m_nodes.count(tag) != 0 ? m_nodes.at(tag)->window : 0;
 }
@@ -374,9 +1014,18 @@ void PaperUIManager::setChildren(double containerTag, winrt::Microsoft::ReactNat
 	winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [this, containerTag = static_cast<int64_t>(containerTag), reactTags = std::move(reactTags)]() mutable
 	{
 		if (auto parentHwnd = TagToHWND(containerTag)) {
+            uint32_t index = 0;
 			for (auto const& child : reactTags) {
-				if (auto childHwnd = TagToHWND(child.AsInt64())) {
-					SetParent(childHwnd, parentHwnd);
+                auto childTag = child.AsInt64();
+				if (auto childHwnd = TagToHWND(childTag)) {
+                    auto oldParentWnd = GetParent(childHwnd);
+                    SetParent(childHwnd, parentHwnd);
+                    const auto& childNode = m_nodes[childTag]->yogaNode;
+                    if (auto oldParentTag = HWNDToTag(oldParentWnd)) {
+                        YGNodeRemoveChild(m_nodes[oldParentTag]->yogaNode.get(), childNode.get());
+                    }
+                    YGNodeInsertChild(m_nodes[containerTag]->yogaNode.get(), childNode.get(), index);
+                    index++;
 				}
 			}
 		}
@@ -447,7 +1096,7 @@ void PaperUIManager::dismissPopupMenu() noexcept
 void PaperUIManager::AddMeasuredRootView(Win32ReactRootView* root) {
 	auto rootHwnd = root->Window();
 	assert(rootHwnd != nullptr);
-	m_nodes.emplace(root->Tag(), std::make_unique<ShadowNode>(rootHwnd));
+	m_nodes.emplace(root->Tag(), std::make_unique<ShadowNode>(rootHwnd, m_yogaConfig));
 	m_rootTag = root->Tag();
 	DoLayout();
 }
