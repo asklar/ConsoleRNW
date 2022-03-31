@@ -4,7 +4,7 @@
 template<typename TPropertyEnum>
 struct PropertyStorage {
     using PropertyTypes = std::variant<DWORD, float, int, bool, std::nullopt_t>;
-    std::array<std::optional<PropertyTypes>, static_cast<int>(TPropertyEnum::Last)> m_properties{};
+    std::array<PropertyTypes, static_cast<int>(TPropertyEnum::Last)> m_properties{};
 };
 
 enum class PropertyIndex {
@@ -19,10 +19,8 @@ struct Property {
     using type = TBackingType;
     static std::optional<TBackingType> Get(PropertyStorage<PropertyIndex>& storage) {
         const auto& v = storage.m_properties[static_cast<int>(index)];
-        if (v.has_value()) {
-            if (std::holds_alternative<TBackingType>(v.value())) {
-                return std::get<TBackingType>(v.value());
-            }
+        if (std::holds_alternative<TBackingType>(v)) {
+            return std::get<TBackingType>(v);
         }
         return std::nullopt;
     }
