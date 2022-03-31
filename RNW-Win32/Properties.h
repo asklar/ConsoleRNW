@@ -3,13 +3,14 @@
 
 template<typename TPropertyEnum>
 struct PropertyStorage {
-    using PropertyTypes = std::variant<DWORD, float, int, std::string>;
+    using PropertyTypes = std::variant<DWORD, float, int, bool, nullopt_t>;
     std::array<std::optional<PropertyTypes>, static_cast<int>(TPropertyEnum::Last)> m_properties{};
 };
 
 enum class PropertyIndex {
     Background,
     BorderRadius,
+    OnMouseEnter,
     Last,
 };
 

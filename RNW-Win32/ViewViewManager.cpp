@@ -1,7 +1,8 @@
 #include "pch.h"
 #include "ViewViewManager.h"
+#include "IWin32ViewManager.h"
 
-ViewViewManager::ViewViewManager() {
+ViewViewManager::ViewViewManager(winrt::Microsoft::ReactNative::ReactContext ctx) : IWin32ViewManager(ctx) {
     WNDCLASSEX wcex{};
     wcex.cbSize = sizeof(wcex);
     wcex.style = CS_HREDRAW | CS_VREDRAW;
@@ -15,14 +16,68 @@ ViewViewManager::ViewViewManager() {
 
 LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     auto node = GetShadowNode(hwnd);
+    auto tag = IWin32ViewManager::GetTag(hwnd);
     switch (msg) {
+    case WM_MOUSEMOVE: {
+        if (!node->m_isMouseOver && node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>()) {
+            node->m_isMouseOver = true;
+            TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd };
+            TrackMouseEvent(&tme);
+
+            auto context = node->m_vm->m_context;
+            context.EmitJSEvent(
+                L"RCTEventEmitter",
+                L"receiveEvent",
+                [tag, lParam, wParam](const winrt::Microsoft::ReactNative::IJSValueWriter& paramsWriter) mutable {
+                    paramsWriter.WriteArrayBegin();
+                    WriteValue(paramsWriter, tag);
+                    WriteValue(paramsWriter, "topMouseEnter");
+
+                    auto xPos = LOWORD(lParam);
+                    auto yPos = HIWORD(lParam);
+                    auto args = winrt::Microsoft::ReactNative::JSValueObject{
+                        {"target", tag},
+                        {"identifier", 0 /*pointer.identifier*/},
+                        //{"pageX", pointer.positionRoot.X},
+                        //{"pageY", pointer.positionRoot.Y},
+                        {"locationX", xPos},
+                        {"locationY", yPos},
+                        //{"timestamp", pointer.timestamp},
+                        //{ "pointerType", GetPointerDeviceTypeName(pointer.deviceType) },
+                        //{"force", pointer.pressure},
+                        {"isLeftButton", (wParam & MK_LBUTTON) != 0},
+                        {"isRightButton", (wParam & MK_RBUTTON) != 0},
+                        {"isMiddleButton", (wParam & MK_MBUTTON) != 0},
+                        //{"isBarrelButtonPressed", pointer.isBarrelButton},
+                        //{"isHorizontalScrollWheel", pointer.isHorizontalScrollWheel},
+                        //{"isEraser", pointer.isEraser},
+                        {"shiftKey", (wParam & MK_SHIFT) != 0 },
+                        //{"ctrlKey", pointer.ctrlKey},
+                        //{"altKey", pointer.altKey} };
+                    };
+                    WriteValue(paramsWriter, args);
+                    paramsWriter.WriteArrayEnd();
+                });
+
+            /*winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(context.Handle(), [node]
+            BatchingEmitter().DispatchEvent(
+                newTag,
+                L"topMouseEnter",
+                winrt::Microsoft::ReactNative::MakeJSValueWriter(GetPointerJson(pointer, newTag)));*/
+
+        }
+        break;
+    }
+    case WM_MOUSELEAVE: {
+        break;
+    }
     case WM_PAINT: {
         PAINTSTRUCT ps{};
         auto dc = BeginPaint(hwnd, &ps);
         RECT rc{};
         GetClientRect(hwnd, &rc);
         auto bkColor = node->GetValue<ShadowNode::BackgroundProperty>();
-        
+
         if (bkColor.has_value()) {
             SetDCBrushColor(dc, bkColor.value());
             auto borderRadius = node->GetValueOrDefault<ShadowNode::BorderRadiusProperty>();
@@ -30,7 +85,7 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
             FillRgn(dc, rgn, (HBRUSH)GetStockObject(DC_BRUSH));
             DeleteObject(rgn);
         }
-            
+
         wchar_t str[100]{};
         GetWindowText(hwnd, str, ARRAYSIZE(str));
         auto bkOld = GetBkColor(dc);
@@ -45,9 +100,8 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
     }
     case WM_ERASEBKGND:
         return 0; // handle background in WM_PAINT
-    default:
-        return DefWindowProc(hwnd, msg, wParam, lParam);
     }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
 ViewViewManager::~ViewViewManager() {
@@ -77,6 +131,9 @@ struct ViewProperties {
         else if constexpr (std::is_same_v<typename TProperty::type, float>) {
             node->SetValue<TProperty>(value.AsFloat());
         }
+        else if constexpr (std::is_same_v<typename TProperty::type, bool>) {
+            node->SetValue<TProperty>(!value.IsNull() && value.AsBoolean());
+        }
         else {
             static_assert(sizeof(TProperty) == 0, "can't convert jsvalue type to property type");
         }
@@ -86,6 +143,7 @@ struct ViewProperties {
     static inline std::unordered_map<std::string, setter_t> m_setters = { {
         { "backgroundColor", Set<ShadowNode::BackgroundProperty> },
         { "borderRadius", Set<ShadowNode::BorderRadiusProperty> },
+        { "onMouseEnter", Set<ShadowNode::OnMouseEnterProperty> },
     } };
 
     static setter_t GetProperty(const std::string& sv) {
@@ -113,20 +171,20 @@ void ViewViewManager::UpdateProperties(int64_t reactTag, HWND hwnd, const winrt:
 
 winrt::Microsoft::ReactNative::JSValueObject ViewViewManager::GetConstants() {
     using namespace winrt::Microsoft::ReactNative;
-    auto view = JSValueObject{
+    JSValueObject view {
         {
             { "Constants", JSValueObject{} },
         { "Commands", JSValueObject{} },
         { "NativeProps", JSValueObject{
             { "onLayout", "function" },
-        { "pointerEvents", "string" },
-        { "onClick", "function" },
-        { "onMouseEnter", "function" },
-        { "onMouseLeave", "function" },
-        { "focusable", "boolean" },
-        { "enableFocusRing", "boolean" },
-        { "tabIndex", "number" },
-        //{ "background", "Color"},
+            { "pointerEvents", "string" },
+            { "onClick", "function" },
+            { "onMouseEnter", "function" },
+            { "onMouseLeave", "function" },
+            { "focusable", "boolean" },
+            { "enableFocusRing", "boolean" },
+            { "tabIndex", "number" },
+            { "test123", "number"},
     } },
         { "bubblingEventTypes", JSValueObject{
     } },

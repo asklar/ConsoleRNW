@@ -177,4 +177,6 @@ private:
     void DirtyYogaNode(int64_t tag);
 
     std::unordered_map<std::string, std::unique_ptr<IWin32ViewManager>> m_viewManagers{};
+    void EnsureViewManager(const std::string& viewManagerName);
+
 };

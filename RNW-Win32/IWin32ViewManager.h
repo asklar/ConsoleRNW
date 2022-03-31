@@ -3,6 +3,7 @@
 #include "ShadowNode.h"
 #include <JSValue.h>
 
+struct ShadowNode;
 struct IWin32ViewManager {
     virtual ~IWin32ViewManager() = 0 {};
     virtual HWND Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props) = 0;
@@ -15,4 +16,14 @@ struct IWin32ViewManager {
     static void SetShadowNode(HWND hwnd, ShadowNode* node) {
         SetWindowLongPtrW(hwnd, 0, reinterpret_cast<LONG_PTR>(node));
     }
+    static int64_t GetTag(HWND hwnd) {
+        return reinterpret_cast<int64_t>(GetProp(hwnd, L"Tag"));
+    }
+    static void SetTag(HWND hwnd, int64_t tag) {
+        SetProp(hwnd, L"Tag", reinterpret_cast<HANDLE>(tag));
+    }
+
+    IWin32ViewManager(winrt::Microsoft::ReactNative::ReactContext ctx) : m_context(ctx) {}
+
+    winrt::Microsoft::ReactNative::ReactContext m_context;
 };

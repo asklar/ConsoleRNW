@@ -34,21 +34,28 @@ void PaperUIManager::ConstantsViaConstantsProvider(winrt::Microsoft::ReactNative
 {}
 
 
+void PaperUIManager::EnsureViewManager(const std::string& viewManagerName) {
+	if (m_viewManagers.count(viewManagerName) == 0) {
+
+		struct ViewManagerFactory {
+			std::string_view name;
+			std::unique_ptr<IWin32ViewManager>(*make)(winrt::Microsoft::ReactNative::ReactContext);
+		};
+		static constexpr const ViewManagerFactory viewMgrFactory[] = {
+			{ "RCTView", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context)); }},
+			{ "RCTVirtualText", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context)); }},
+			{ "RCTRawText", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context)); }},
+			{ "RCTText", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context)); }},
+		};
+		const auto& entry = std::find_if(std::begin(viewMgrFactory), std::end(viewMgrFactory), [&viewManagerName](const auto& i) { return i.name == viewManagerName; });
+		m_viewManagers[viewManagerName] = entry->make(m_context);
+
+	}
+}
 
 winrt::Microsoft::ReactNative::JSValueObject PaperUIManager::getConstantsForViewManager(std::string viewManagerName) noexcept
 {
-    if (m_viewManagers.count(viewManagerName) == 0) {
-        struct ViewManagerFactory {
-            std::string_view name;
-            std::unique_ptr<IWin32ViewManager>(*make)();
-        };
-        constexpr ViewManagerFactory viewMgrFactory[] = {
-            {  "RCTView", []() { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager); }}
-        };
-        const auto& entry = std::find_if(std::begin(viewMgrFactory), std::end(viewMgrFactory), [&viewManagerName](const auto& i) { return i.name == viewManagerName; });
-        m_viewManagers[viewManagerName] = entry->make();
-            
-    }
+	EnsureViewManager(viewManagerName);
 
     return m_viewManagers[viewManagerName]->GetConstants();
 }
@@ -200,9 +207,11 @@ void PaperUIManager::createView(
     winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
         [this, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), rootTag = static_cast<int64_t>(rootTag), props = std::move(props)]() mutable
     {
-        auto hwnd = m_viewManagers[viewName]->Create(reactTag, rootTag, TagToHWND(rootTag), props);
-        SetPropW(hwnd, L"Tag", (HANDLE)reactTag);
-        auto result = m_nodes.emplace(reactTag, std::make_unique<ShadowNode>(hwnd, m_yogaConfig));
+		EnsureViewManager(viewName);
+		const auto& vm = m_viewManagers[viewName];
+        auto hwnd = vm->Create(reactTag, rootTag, TagToHWND(rootTag), props);
+        IWin32ViewManager::SetTag(hwnd, reactTag);
+        auto result = m_nodes.emplace(reactTag, std::make_unique<ShadowNode>(hwnd, m_yogaConfig, vm.get()));
         if (result.second) {
             auto shadowNode = result.first->second.get();
             SetWindowLongPtrW(hwnd, 0, reinterpret_cast<LONG_PTR>(shadowNode));
@@ -218,7 +227,7 @@ void PaperUIManager::createView(
             }
             */
         }
-        m_viewManagers[viewName]->UpdateProperties(reactTag, hwnd, props);
+        vm->UpdateProperties(reactTag, hwnd, props);
     });
 	
 }
@@ -398,7 +407,7 @@ void PaperUIManager::removeRootView(double reactTag) noexcept
 }
 
 int64_t PaperUIManager::HWNDToTag(HWND hwnd) {
-    return (int64_t)GetProp(hwnd, L"Tag");
+	return IWin32ViewManager::GetTag(hwnd);
 }
 
 HWND PaperUIManager::TagToHWND(int64_t tag) {
@@ -492,7 +501,7 @@ void PaperUIManager::dismissPopupMenu() noexcept
 void PaperUIManager::AddMeasuredRootView(Win32ReactRootView* root) {
 	auto rootHwnd = root->Window();
 	assert(rootHwnd != nullptr);
-	m_nodes.emplace(root->Tag(), std::make_unique<ShadowNode>(rootHwnd, m_yogaConfig));
+	m_nodes.emplace(root->Tag(), std::make_unique<ShadowNode>(rootHwnd, m_yogaConfig, nullptr));
 	m_rootTag = root->Tag();
 	DoLayout();
 }

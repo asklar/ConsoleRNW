@@ -5,12 +5,7 @@
 
 struct ViewViewManager : IWin32ViewManager {
 
-    enum class ClassIndex {
-        Background = 0,
-        Last,
-    };
-
-    ViewViewManager();
+    ViewViewManager(winrt::Microsoft::ReactNative::ReactContext ctx);
 
     static LRESULT __stdcall ViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 

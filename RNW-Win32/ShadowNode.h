@@ -2,8 +2,8 @@
 #include <Windows.h>
 #include "Properties.h"
 #include <../yoga/yoga/Yoga.h>
-
-
+#include "IWin32ViewManager.h"
+struct IWin32ViewManager;
 struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringPropertyIndex> {
     HWND window{};
     struct YogaNodeDeleter {
@@ -20,7 +20,7 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringProperty
     }
 
     YogaNodePtr yogaNode{};
-    ShadowNode(HWND w, YGConfigRef config) : window(w), yogaNode(make_yoga_node(config)) {
+    ShadowNode(HWND w, YGConfigRef config, IWin32ViewManager* vm) : window(w), yogaNode(make_yoga_node(config)), m_vm(vm) {
 
     }
     ~ShadowNode() {
@@ -29,10 +29,14 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringProperty
     ShadowNode(const ShadowNode&) = delete;
     ShadowNode(ShadowNode&&) = default;
 
+    IWin32ViewManager* m_vm{nullptr};
+    bool m_isMouseOver{ false };
+
     bool ImplementsPadding() const noexcept { return false; }
 
     using BackgroundProperty = Property<COLORREF, PropertyIndex::Background>;
     using BorderRadiusProperty = Property<int, PropertyIndex::BorderRadius>;
+    using OnMouseEnterProperty = Property<bool, PropertyIndex::OnMouseEnter>;
     using TextProperty = StringProperty<StringPropertyIndex::Text>;
     
     template<typename TProperty>
