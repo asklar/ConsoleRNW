@@ -13,8 +13,8 @@ class App extends React.Component {
     nativeLoggingHook("************ I'm in render()", 0);
 
     return (
-      <View style={{width: 600, height: 600, backgroundColor: "green"}}>
-        <View style={{width: 100, height: 100, backgroundColor: "pink"}} />
+      <View style={{width: 600, height: 600, backgroundColor: "green", borderRadius: 20}}>
+        <View style={{width: 100, height: 100, backgroundColor: "yellow", borderRadius: 20}} />
       </View>
     );
   }

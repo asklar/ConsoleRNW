@@ -164,13 +164,18 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Dispatcher.h" />
+    <ClInclude Include="IWin32ViewManager.h" />
     <ClInclude Include="PaperUIManager.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="Properties.h" />
+    <ClInclude Include="ShadowNode.h" />
+    <ClInclude Include="ViewViewManager.h" />
     <ClInclude Include="Win32ReactRootView.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="RNW-Win32.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="RedBoxHandler.h" />
+    <ClInclude Include="YogaHelpers.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="PaperUIManager.cpp" />
@@ -179,7 +184,9 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Timing.cpp" />
+    <ClCompile Include="ViewViewManager.cpp" />
     <ClCompile Include="Win32ReactRootView.cpp" />
+    <ClCompile Include="YogaHelpers.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="RNW-Win32.rc" />
@@ -189,6 +196,7 @@
     <Image Include="small.ico" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="cpp.hint" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
