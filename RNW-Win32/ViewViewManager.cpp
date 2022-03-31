@@ -74,7 +74,7 @@ struct ViewProperties {
         else if constexpr (std::is_same_v<typename TProperty::type, int>) {
             node->SetValue<TProperty>(value.AsInt32());
         }
-        else if constexpr (std::is_same_v<typename TProperty:type, float>) {
+        else if constexpr (std::is_same_v<typename TProperty::type, float>) {
             node->SetValue<TProperty>(value.AsFloat());
         }
         else {
