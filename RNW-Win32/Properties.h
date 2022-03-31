@@ -3,7 +3,10 @@
 
 template<typename TPropertyEnum>
 struct PropertyStorage {
-    using PropertyTypes = std::variant<DWORD, float, int, bool, std::nullopt_t>;
+private:
+    struct nullopt_t {};
+public:
+    using PropertyTypes = std::variant<nullopt_t, DWORD, float, int, bool>;
     std::array<PropertyTypes, static_cast<int>(TPropertyEnum::Last)> m_properties{};
 };
 
