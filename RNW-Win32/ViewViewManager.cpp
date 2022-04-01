@@ -8,34 +8,16 @@ ViewViewManager::ViewViewManager(winrt::Microsoft::ReactNative::ReactContext ctx
     wcex.style = CS_HREDRAW | CS_VREDRAW;
     wcex.cbWndExtra = sizeof(void*);
     wcex.hInstance = nullptr;
+    wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wcex.lpszClassName = L"RCTView";
 
     wcex.lpfnWndProc = ViewWndProc;
     RegisterClassEx(&wcex);
 }
 
-LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    auto node = GetShadowNode(hwnd);
-    auto tag = IWin32ViewManager::GetTag(hwnd);
-    switch (msg) {
-    case WM_MOUSEMOVE: {
-        if (!node->m_isMouseOver && node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>()) {
-            node->m_isMouseOver = true;
-            TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd };
-            TrackMouseEvent(&tme);
-
-            auto context = node->m_vm->m_context;
-            context.EmitJSEvent(
-                L"RCTEventEmitter",
-                L"receiveEvent",
-                [tag, lParam, wParam](const winrt::Microsoft::ReactNative::IJSValueWriter& paramsWriter) mutable {
-                    paramsWriter.WriteArrayBegin();
-                    WriteValue(paramsWriter, tag);
-                    WriteValue(paramsWriter, "topMouseEnter");
-
-                    auto xPos = LOWORD(lParam);
-                    auto yPos = HIWORD(lParam);
-                    auto args = winrt::Microsoft::ReactNative::JSValueObject{
+static auto MouseEventArgs(int64_t tag, WPARAM wParam, LPARAM lParam) {
+    auto [xPos, yPos] = MAKEPOINTS(lParam);
+    return winrt::Microsoft::ReactNative::JSValueObject{
                         {"target", tag},
                         {"identifier", 0 /*pointer.identifier*/},
                         //{"pageX", pointer.positionRoot.X},
@@ -54,21 +36,27 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
                         {"shiftKey", (wParam & MK_SHIFT) != 0 },
                         //{"ctrlKey", pointer.ctrlKey},
                         //{"altKey", pointer.altKey} };
-                    };
-                    WriteValue(paramsWriter, args);
-                    paramsWriter.WriteArrayEnd();
-                });
+    };
+}
+LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    auto node = GetShadowNode(hwnd);
+    auto tag = IWin32ViewManager::GetTag(hwnd);
+    switch (msg) {
+    case WM_MOUSEMOVE: {
+        if (!node->m_isMouseOver && node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>()) {
+            node->m_isMouseOver = true;
+            TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd };
+            TrackMouseEvent(&tme);
 
-            /*winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(context.Handle(), [node]
-            BatchingEmitter().DispatchEvent(
-                newTag,
-                L"topMouseEnter",
-                winrt::Microsoft::ReactNative::MakeJSValueWriter(GetPointerJson(pointer, newTag)));*/
+            node->m_vm->EmitEvent("topMouseEnter", tag, MouseEventArgs(tag, wParam, lParam));
 
         }
+        return 0;
         break;
     }
     case WM_MOUSELEAVE: {
+        node->m_isMouseOver = false;
+        node->m_vm->EmitEvent("topMouseLeave", tag, MouseEventArgs(tag, wParam, lParam));
         break;
     }
     case WM_PAINT: {
@@ -144,6 +132,7 @@ struct ViewProperties {
         { "backgroundColor", Set<ShadowNode::BackgroundProperty> },
         { "borderRadius", Set<ShadowNode::BorderRadiusProperty> },
         { "onMouseEnter", Set<ShadowNode::OnMouseEnterProperty> },
+        { "onMouseLeave", Set<ShadowNode::OnMouseLeaveProperty> },
     } };
 
     static setter_t GetProperty(const std::string& sv) {
@@ -188,7 +177,14 @@ winrt::Microsoft::ReactNative::JSValueObject ViewViewManager::GetConstants() {
     } },
         { "bubblingEventTypes", JSValueObject{
     } },
-        { "directEventTypes", JSValueObject{} },
+        { "directEventTypes", JSValueObject{
+            { "topMouseEnter", JSValueObject {
+                { "registrationName", "onMouseEnter" },
+            }},
+            { "topMouseLeave", JSValueObject {
+                { "registrationName", "onMouseLeave" },
+            }},
+        } },
         }
     };
     return view;

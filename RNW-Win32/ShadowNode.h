@@ -37,6 +37,7 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringProperty
     using BackgroundProperty = Property<COLORREF, PropertyIndex::Background>;
     using BorderRadiusProperty = Property<int, PropertyIndex::BorderRadius>;
     using OnMouseEnterProperty = Property<bool, PropertyIndex::OnMouseEnter>;
+    using OnMouseLeaveProperty = Property<bool, PropertyIndex::OnMouseLeave>;
     using TextProperty = StringProperty<StringPropertyIndex::Text>;
     
     template<typename TProperty>

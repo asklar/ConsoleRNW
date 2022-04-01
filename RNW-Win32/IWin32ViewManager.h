@@ -25,5 +25,19 @@ struct IWin32ViewManager {
 
     IWin32ViewManager(winrt::Microsoft::ReactNative::ReactContext ctx) : m_context(ctx) {}
 
+    template<typename T>
+    auto EmitEvent(std::string_view evtName, uint64_t tag, T&& args) {
+        return m_context.CallJSFunction(
+            L"RCTEventEmitter",
+            L"receiveEvent",
+            [tag, evtName, args = std::move(args)](const winrt::Microsoft::ReactNative::IJSValueWriter& paramsWriter) mutable {
+                paramsWriter.WriteArrayBegin();
+                WriteValue(paramsWriter, tag);
+                WriteValue(paramsWriter, evtName);
+                WriteValue(paramsWriter, args);
+                paramsWriter.WriteArrayEnd();
+            });
+    }
+
     winrt::Microsoft::ReactNative::ReactContext m_context;
 };
