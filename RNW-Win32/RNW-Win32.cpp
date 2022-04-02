@@ -12,6 +12,7 @@
 #include "Win32ReactRootView.h"
 #include "ModuleRegistration.h"
 #include "PaperUIManager.h"
+#include <filesystem>
 
 #pragma comment(linker,"\"/manifestdependency:type='win32' \
  name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
@@ -145,7 +146,11 @@ fire_and_forget Start() {
 #ifdef DEBUG
     s.UseFastRefresh(true);
 #else
-    s.BundleRootPath(LR"(F:\consoleRNW\x64\Debug)");
+    wchar_t exePath[MAX_PATH];
+    GetModuleFileNameW(nullptr, exePath, std::size(exePath));
+    filesystem::path directory(exePath);
+    directory = directory.parent_path();
+    s.BundleRootPath(directory.wstring().c_str());
 #endif
     s.UseDeveloperSupport(false);
     s.UseDirectDebugger(true);
@@ -239,21 +244,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 #pragma endregion
 
     SetTimer(hwnd, 1, USER_TIMER_MINIMUM, nullptr);
-    while (!g_exit) {
-
         // Main message loop:
-        while (GetMessage(&msg, nullptr, 0, 0))
-        {
-            if (msg.message == WM_TIMER && msg.hwnd == hwnd) {
-                g_uiDispatcher.RunAll();
-                continue;
-            }
+    while (GetMessage(&msg, nullptr, 0, 0))
+    {
+        if (g_exit) break;
+        if (msg.message == WM_TIMER && msg.hwnd == hwnd) {
+            g_uiDispatcher.RunAll();
+            continue;
+        }
 
-            if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
-            {
-                TranslateMessage(&msg);
-                DispatchMessage(&msg);
-            }
+        if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
         }
     }
     KillTimer(hwnd, 1);
