@@ -140,8 +140,13 @@ constexpr std::string_view to_string(winrt::Microsoft::ReactNative::LogLevel val
 fire_and_forget Start() {
     auto s = host.InstanceSettings();
     s.JavaScriptBundleFile(L"index");
+
     s.UseWebDebugger(false); // WebDebugger will not work since we are using JSI.
+#ifdef DEBUG
     s.UseFastRefresh(true);
+#else
+    s.BundleRootPath(LR"(F:\consoleRNW\x64\Debug)");
+#endif
     s.UseDeveloperSupport(false);
     s.UseDirectDebugger(true);
     s.JSIEngineOverride(JSIEngine::Hermes);
@@ -175,7 +180,7 @@ fire_and_forget Start() {
 
     s.PackageProviders().Append(winrt::make<HeadlessPackageProvider>());
 
-    s.UIDispatcher(winrt::make<MockDispatcher>(g_uiDispatcher));
+    s.UIDispatcher(winrt::make<MockDispatcher>());
 
     co_await host.LoadInstance();
 
@@ -233,19 +238,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     Start();
 #pragma endregion
 
+    SetTimer(hwnd, 1, USER_TIMER_MINIMUM, nullptr);
+    while (!g_exit) {
 
-
-    // Main message loop:
-    while (GetMessage(&msg, nullptr, 0, 0))
-    {
-        if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
+        // Main message loop:
+        while (GetMessage(&msg, nullptr, 0, 0))
         {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-        g_uiDispatcher.RunAll();
-    }
+            if (msg.message == WM_TIMER && msg.hwnd == hwnd) {
+                g_uiDispatcher.RunAll();
+                continue;
+            }
 
+            if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
+            {
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
+            }
+        }
+    }
+    KillTimer(hwnd, 1);
     return (int) msg.wParam;
 }
 
@@ -292,7 +303,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, _Out_ HWND& hWnd)
    hInst = hInstance; // Store instance handle in our global variable
 
    hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+      CW_USEDEFAULT, CW_USEDEFAULT, 800, 600, nullptr, nullptr, hInstance, nullptr);
 
    if (!hWnd)
    {
@@ -346,6 +357,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     case WM_DESTROY:
         PostQuitMessage(0);
+        break;
+    case WM_CLOSE:
+        g_exit = true;
         break;
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);

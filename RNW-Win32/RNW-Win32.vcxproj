@@ -221,6 +221,7 @@
     <Import Project="..\packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.targets" Condition="Exists('..\packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.targets')" />
     <Import Project="..\packages\Unpackaged.0.0.1\build\unpackaged.targets" Condition="Exists('..\packages\Unpackaged.0.0.1\build\unpackaged.targets')" />
     <Import Project="..\packages\ReactNative.Hermes.Windows.0.10.0-ms.1\build\native\ReactNative.Hermes.Windows.targets" Condition="Exists('..\packages\ReactNative.Hermes.Windows.0.10.0-ms.1\build\native\ReactNative.Hermes.Windows.targets')" />
+    <Import Project="..\packages\Microsoft.VCRTForwarders.140.1.0.7\build\native\Microsoft.VCRTForwarders.140.targets" Condition="Exists('..\packages\Microsoft.VCRTForwarders.140.1.0.7\build\native\Microsoft.VCRTForwarders.140.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -232,5 +233,6 @@
     <Error Condition="!Exists('..\packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Windows.CppWinRT.2.0.210930.14\build\native\Microsoft.Windows.CppWinRT.targets'))" />
     <Error Condition="!Exists('..\packages\Unpackaged.0.0.1\build\unpackaged.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Unpackaged.0.0.1\build\unpackaged.targets'))" />
     <Error Condition="!Exists('..\packages\ReactNative.Hermes.Windows.0.10.0-ms.1\build\native\ReactNative.Hermes.Windows.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\ReactNative.Hermes.Windows.0.10.0-ms.1\build\native\ReactNative.Hermes.Windows.targets'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.VCRTForwarders.140.1.0.7\build\native\Microsoft.VCRTForwarders.140.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.VCRTForwarders.140.1.0.7\build\native\Microsoft.VCRTForwarders.140.targets'))" />
   </Target>
 </Project>

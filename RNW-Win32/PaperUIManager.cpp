@@ -168,6 +168,7 @@ void PaperUIManager::DoLayout() {
 
   for (auto &tagToYogaNode : m_nodes) {
     int64_t tag = tagToYogaNode.first;
+	if (tag == m_rootTag) continue;
     YGNodeRef yogaNode = tagToYogaNode.second->yogaNode.get();
 
     if (!YGNodeGetHasNewLayout(yogaNode))
@@ -194,7 +195,6 @@ void PaperUIManager::DoLayout() {
 		SetWindowPos(shadowNode->window, nullptr, left, top, width, height, SWP_NOZORDER);
 	}
   }
-
 }
 
 
@@ -228,6 +228,8 @@ void PaperUIManager::createView(
             */
         }
         vm->UpdateProperties(reactTag, hwnd, props);
+
+		RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE);
     });
 	
 }
@@ -235,7 +237,9 @@ void PaperUIManager::createView(
 void PaperUIManager::updateView(double reactTag, std::string viewName, winrt::Microsoft::ReactNative::JSValueObject&& props) noexcept
 {
     auto tag = static_cast<int64_t>(reactTag);
-    m_viewManagers[viewName]->UpdateProperties(tag, m_nodes[tag]->window, props);
+	auto hwnd = m_nodes[tag]->window;
+    m_viewManagers[viewName]->UpdateProperties(tag, hwnd, props);
+	RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE);
 	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
 	//	[uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), props = std::move(props)]() mutable
 	//{

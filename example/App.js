@@ -12,6 +12,7 @@ import {StyleSheet, Text, useColorScheme, View} from 'react-native';
 
 import {Colors} from 'react-native/Libraries/NewAppScreen';
 
+
 const Section = ({children, title}) => {
   const isDarkMode = useColorScheme() === 'dark';
   return (
@@ -45,18 +46,21 @@ const App = () => {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
   };
 
+  const [bgColor, setBgColor] = React.useState('red');
   return (
     <View
       style={{
         width: 400,
         height: 200,
-        backgroundColor: 'red',
+        backgroundColor: bgColor,
         borderRadius: 10,
       }}
       onMouseEnter={e => {
+        setBgColor('green');
         console.log(`ON MOUSE ENTER! ${JSON.stringify(e.nativeEvent)}`);
       }}
       onMouseLeave={e => {
+        setBgColor('red')
         console.log(`MOUSE LEAVE`);
       }}
       test123={3}>

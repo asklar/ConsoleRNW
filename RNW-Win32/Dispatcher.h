@@ -10,10 +10,9 @@ struct UIDispatcher
 
     void RunAll() {
         auto tasks = std::move(m_tasks);
-        for (auto task : tasks)
+        for (auto& task : tasks)
             task();
     }
-
 private:
     std::vector<winrt::Microsoft::ReactNative::ReactDispatcherCallback> m_tasks;
 };
@@ -23,7 +22,7 @@ UIDispatcher g_uiDispatcher;
 // Super simplistic dispatcher manually pumped in main loop
 struct MockDispatcher : winrt::implements<MockDispatcher, winrt::Microsoft::ReactNative::IReactDispatcher> {
 
-    MockDispatcher(UIDispatcher uiDispatcher) {
+    MockDispatcher() {
         m_threadId = std::this_thread::get_id();
     }
 
