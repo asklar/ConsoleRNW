@@ -15,9 +15,6 @@ struct Win32ReactRootView : std::enable_shared_from_this<Win32ReactRootView> {
         return m_componentName;
     }
 
-    void ReactNativeHost(winrt::Microsoft::ReactNative::ReactNativeHost host) {
-    }
-
     winrt::Microsoft::ReactNative::IReactViewHost m_viewHost;
 
 private:

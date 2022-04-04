@@ -7,6 +7,8 @@
 #include "ShadowNode.h"
 #include "IWin32ViewManager.h"
 
+#include <../../.fmt/fmt-7.1.3/include/fmt/format.h>
+
 namespace Mso {
     template<typename T>
     using Functor = std::function<T>;
@@ -16,7 +18,9 @@ void AssertTag(bool, DWORD);
 
 REACT_MODULE(PaperUIManager, L"UIManager")
 struct PaperUIManager final : std::enable_shared_from_this<PaperUIManager> {
-    PaperUIManager() {}
+    PaperUIManager() {
+        OutputDebugStringA(fmt::format("{} PaperUIManager ctor\n", GetTickCount64()).c_str());
+    }
     PaperUIManager(const PaperUIManager&) = delete;
     ~PaperUIManager();
 
@@ -153,6 +157,7 @@ struct PaperUIManager final : std::enable_shared_from_this<PaperUIManager> {
     void AddMeasuredRootView(Win32ReactRootView* root);
     void DoLayout();
     void UpdateExtraLayout(int64_t tag);
+
     static winrt::Microsoft::ReactNative::ReactPropertyId<
         winrt::Microsoft::ReactNative::ReactNonAbiValue<std::shared_ptr<PaperUIManager>>> UIManagerProperty() {
         static winrt::Microsoft::ReactNative::ReactPropertyId<winrt::Microsoft::ReactNative::ReactNonAbiValue<std::shared_ptr<PaperUIManager>>> _value{
@@ -172,7 +177,6 @@ private:
     HWND TagToHWND(int64_t);
     int64_t HWNDToTag(HWND hwnd);
     int64_t m_rootTag{};
-
 
     void DirtyYogaNode(int64_t tag);
 

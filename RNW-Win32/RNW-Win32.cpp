@@ -97,12 +97,12 @@ struct Win32ReactViewInstance : winrt::implements<Win32ReactViewInstance, Micros
         m_context = context;
     }
 
-    void UpdateRootView() {
+    void UpdateRootView(winrt::Microsoft::ReactNative::ReactInstanceState state) {
 
     }
 
     void UninitRootView() {
-
+        m_rootview = nullptr;
     }
 private:
     Microsoft::ReactNative::ReactNativeHost m_host{ nullptr };
@@ -142,17 +142,26 @@ fire_and_forget Start() {
     auto s = host.InstanceSettings();
     s.JavaScriptBundleFile(L"index");
 
-    s.UseWebDebugger(false); // WebDebugger will not work since we are using JSI.
-#ifdef DEBUG
+    // WebDebugger will not work since we are using JSI / TurboModules for PaperUIManager
+    s.UseWebDebugger(false); 
+#ifdef _DEBUG
     s.UseFastRefresh(true);
 #else
+
+#if 0
+    // loose file
     wchar_t exePath[MAX_PATH];
     GetModuleFileNameW(nullptr, exePath, std::size(exePath));
     filesystem::path directory(exePath);
     directory = directory.parent_path();
     s.BundleRootPath(directory.wstring().c_str());
+#else
+    s.BundleRootPath(L"resource://");
+    //
 #endif
-    s.UseDeveloperSupport(false);
+
+#endif
+    s.UseDeveloperSupport(true);
     s.UseDirectDebugger(true);
     s.JSIEngineOverride(JSIEngine::Hermes);
 
@@ -169,8 +178,6 @@ fire_and_forget Start() {
             auto context = React::ReactContext(args.Context());
             g_context = context;
             
-            rootview->ReactNativeHost(host);
-
             rootview->Start(g_context);
             auto viewInstance = winrt::make_self<Win32ReactViewInstance>(host, rootview);
             rootview->m_viewHost.AttachViewInstance(viewInstance.as<IReactViewInstance>());

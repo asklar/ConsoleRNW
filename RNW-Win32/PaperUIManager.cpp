@@ -28,6 +28,11 @@ void PaperUIManager::Initialize(winrt::Microsoft::ReactNative::ReactContext cons
 	// gPrintSkips)
 #endif
 
+	winrt::Microsoft::ReactNative::ReactCoreInjection::SetUIBatchCompleteCallback(m_context.Properties().Handle(), 
+		[](winrt::Microsoft::ReactNative::IReactPropertyBag bag) {
+			auto uimgr = *winrt::Microsoft::ReactNative::ReactPropertyBag(bag).Get(UIManagerProperty());
+			uimgr->onBatchCompleted();
+		});
 }
 
 void PaperUIManager::ConstantsViaConstantsProvider(winrt::Microsoft::ReactNative::ReactConstantProvider& constants) noexcept
@@ -80,6 +85,15 @@ winrt::Microsoft::ReactNative::JSValueObject PaperUIManager::lazilyLoadView(std:
 
 void PaperUIManager::onBatchCompleted() noexcept {
 	DoLayout();
+	//if (m_inBatch) {
+	//	m_inBatch = false;
+
+	//	const auto callbacks = m_batchCompletedCallbacks;
+	//	m_batchCompletedCallbacks.clear();
+	//	for (const auto& callback : callbacks) {
+	//		callback.operator()();
+	//	}
+	//}
 }
 
 
@@ -204,6 +218,8 @@ void PaperUIManager::createView(
 	double rootTag,
 	winrt::Microsoft::ReactNative::JSValueObject&& props) noexcept
 {
+	OutputDebugStringA(fmt::format("{} createView\n", GetTickCount64()).c_str());
+
     winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
         [this, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), rootTag = static_cast<int64_t>(rootTag), props = std::move(props)]() mutable
     {
@@ -302,6 +318,9 @@ void PaperUIManager::measure(
 	double reactTag,
 	Mso::Functor<void(double left, double top, double width, double height, double pageX, double pageY)> const& callback) noexcept
 {
+	RECT rect{};
+	GetWindowRect(m_nodes[reactTag]->window, &rect);
+	callback(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, rect.left, rect.top);
 	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [context = m_context, reactTag = static_cast<int64_t>(reactTag), callback = std::move(callback)]() mutable
 	//{
 	//	uimanager->measure(reactTag, [context = std::move(context), callback = std::move(callback)](double left, double top, double width, double height, double pageX, double pageY) noexcept
@@ -315,6 +334,9 @@ void PaperUIManager::measureInWindow(
 	double reactTag,
 	Mso::Functor<void(double x, double y, double width, double height)> const& callback) noexcept
 {
+	RECT rect{};
+	GetWindowRect(m_nodes[reactTag]->window, &rect);
+	callback(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
  	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [context = m_context, uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), callback = std::move(callback)]() mutable
 	//{
 	//	uimanager->measureInWindow(reactTag, [context = std::move(context), callback = std::move(callback)](double left, double top, double width, double height) noexcept
@@ -338,6 +360,7 @@ void PaperUIManager::measureLayout(
 	Mso::Functor<void(winrt::Microsoft::ReactNative::JSValue const&)> const& errorCallback,
 	Mso::Functor<void(double left, double top, double width, double height)> const& callback) noexcept
 {
+	errorCallback({ "not implemented" });
 	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [context = m_context, uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), ancestorReactTag = static_cast<int64_t>(ancestorReactTag), errorCallback = std::move(errorCallback), callback = std::move(callback)]() mutable
 	//{
 	//	uimanager->measureLayout(reactTag, ancestorReactTag,
