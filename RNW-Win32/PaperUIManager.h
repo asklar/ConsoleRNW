@@ -18,9 +18,7 @@ void AssertTag(bool, DWORD);
 
 REACT_MODULE(PaperUIManager, L"UIManager")
 struct PaperUIManager final : std::enable_shared_from_this<PaperUIManager> {
-    PaperUIManager() {
-        OutputDebugStringA(fmt::format("{} PaperUIManager ctor\n", GetTickCount64()).c_str());
-    }
+    PaperUIManager();
     PaperUIManager(const PaperUIManager&) = delete;
     ~PaperUIManager();
 
@@ -194,7 +192,9 @@ private:
         // to a higher value (sharper curves) in fast refresh would leave a sliver of the border painted the old color, 
         // since we don't erase the background. So, redraw the parent.
         
-        RedrawWindow(TagToHWND(m_rootTag), nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
+        RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE);
         //RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE);
     }
+
+    ULONG_PTR m_gdiplusToken{};
 };

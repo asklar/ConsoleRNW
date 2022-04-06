@@ -2,6 +2,8 @@
 #include "ViewViewManager.h"
 #include "IWin32ViewManager.h"
 
+#pragma comment(lib, "gdiplus.lib")
+
 ViewViewManager::ViewViewManager(winrt::Microsoft::ReactNative::ReactContext ctx) : IWin32ViewManager(ctx) {
     WNDCLASSEX wcex{};
     wcex.cbSize = sizeof(wcex);
@@ -39,6 +41,46 @@ static auto MouseEventArgs(int64_t tag, WPARAM wParam, LPARAM lParam) {
                         //{"altKey", pointer.altKey} };
     };
 }
+
+void GetRoundRectPath(Gdiplus::GraphicsPath* pPath, Gdiplus::Rect r, int dia)
+{
+    // diameter can't exceed width or height
+    if (dia > r.Width)    dia = r.Width;
+    if (dia > r.Height)    dia = r.Height;
+
+    // define a corner 
+    Gdiplus::Rect Corner(r.X, r.Y, dia, dia);
+
+    // begin path
+    pPath->Reset();
+
+    // top left
+    pPath->AddArc(Corner, 180, 90);
+
+    // tweak needed for radius of 10 (dia of 20)
+    if (dia == 20)
+    {
+        Corner.Width += 1;
+        Corner.Height += 1;
+        r.Width -= 1; r.Height -= 1;
+    }
+
+    // top right
+    Corner.X += (r.Width - dia - 1);
+    pPath->AddArc(Corner, 270, 90);
+
+    // bottom right
+    Corner.Y += (r.Height - dia - 1);
+    pPath->AddArc(Corner, 0, 90);
+
+    // bottom left
+    Corner.X -= (r.Width - dia - 1);
+    pPath->AddArc(Corner, 90, 90);
+
+    // end path
+    pPath->CloseFigure();
+}
+
 LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     auto node = GetShadowNode(hwnd);
     auto tag = IWin32ViewManager::GetTag(hwnd);
@@ -61,55 +103,83 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
         break;
     }
     case WM_PAINT: {
-        PAINTSTRUCT ps{};
-        auto dc = BeginPaint(hwnd, &ps);
-        RECT rc{};
-        GetClientRect(hwnd, &rc);
-        auto bkColor = node->GetValue<ShadowNode::BackgroundProperty>();
-
-        if (bkColor.has_value()) {
-            auto old = SetDCBrushColor(dc, bkColor.value());
-            auto borderRadius = node->GetValueOrDefault<ShadowNode::BorderRadiusProperty>();
-            auto rgn = CreateRoundRectRgn(rc.left, rc.top, rc.right, rc.bottom, borderRadius, borderRadius);
-            FillRgn(dc, rgn, (HBRUSH)GetStockObject(DC_BRUSH));
-            DeleteObject(rgn);
-            SetDCBrushColor(dc, old);
-        }
-
-        wchar_t str[100]{};
-        GetWindowText(hwnd, str, ARRAYSIZE(str));
-        auto bkOld = GetBkColor(dc);
+        OutputDebugStringA(fmt::format("Paint view {}\n", tag).c_str());
+        std::unique_ptr<Gdiplus::Graphics> g(Gdiplus::Graphics::FromHWND(hwnd));
         {
-            SetBkColor(dc, bkColor.has_value() ? bkColor.value() : GetSysColor(COLOR_WINDOW));
-            DrawText(dc, str, wcslen(str), &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            SetBkColor(dc, bkOld);
+            
+            //g->SetSmoothingMode(Gdiplus::SmoothingMode::SmoothingModeAntiAlias);
+
+            auto bkColor = node->GetValue<ShadowNode::BackgroundProperty>();
+
+            RECT rc{};
+            GetClientRect(hwnd, &rc);
+
+            if (bkColor.has_value()) {
+                Gdiplus::Color bk{ GetRValue(bkColor.value()), GetGValue(bkColor.value()), GetBValue(bkColor.value()) };
+                Gdiplus::GraphicsPath path;
+                auto borderRadius = node->GetValueOrDefault<ShadowNode::BorderRadiusProperty>();
+                int dia = borderRadius * 2;
+                GetRoundRectPath(&path, { rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top }, dia);
+                Gdiplus::Pen pen{ bk };
+                Gdiplus::SolidBrush b{ bk };
+
+                g->FillPath(&b, &path);
+                g->DrawPath(&pen, &path);
+                //auto old = SetDCBrushColor(dc, bkColor.value());
+                //auto rgn = CreateRoundRectRgn(rc.left, rc.top, rc.right, rc.bottom, borderRadius, borderRadius);
+
+
+                //FillRgn(dc, rgn, (HBRUSH)GetStockObject(DC_BRUSH));
+                //DeleteObject(rgn);
+                //SetDCBrushColor(dc, old);
+            }
+
+            wchar_t str[100]{};
+            GetWindowText(hwnd, str, ARRAYSIZE(str));
+            Gdiplus::FontFamily   fontFamily(L"Arial");
+            Gdiplus::Font         font(&fontFamily, 12, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
+            Gdiplus::StringFormat stringFormat;
+            Gdiplus::SolidBrush solidBrush(Gdiplus::Color{ 0x20, 0xdd, 0x60 });
+            // Center-justify each line of text.
+            stringFormat.SetAlignment(Gdiplus::StringAlignmentCenter);
+
+            // Center the block of text (top to bottom) in the rectangle.
+            stringFormat.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+            const Gdiplus::RectF layoutRect{ static_cast<float>(rc.left), static_cast<float>(rc.right),
+                static_cast<float>(rc.right - rc.left), static_cast<float>(rc.bottom - rc.top) };
+            g->DrawString(str, -1, &font, Gdiplus::RectF{ 0, 0, 100, 100 }, {}, &solidBrush);
+            
+            //g->DrawString(L"TEST 123", -1, &font, Gdiplus::RectF{ 0, 0, 100, 100 }, &stringFormat, &solidBrush);
+
+            //g->FillRectangle(&solidBrush, Gdiplus::Rect{ 0, 0, 100, 100 });
+            //auto bkOld = GetBkColor(dc);
+            //{
+            //    SetBkColor(dc, bkColor.has_value() ? bkColor.value() : GetSysColor(COLOR_WINDOW));
+            //    DrawText(dc, str, wcslen(str), &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            //    SetBkColor(dc, bkOld);
+            //}
+            g->Flush();
         }
-        EndPaint(hwnd, &ps);
+
         return 0;
         break;
     }
-    case WM_ERASEBKGND:
-        PAINTSTRUCT ps{};
-        auto dc = BeginPaint(hwnd, &ps);
+    case WM_ERASEBKGND: {
+        std::unique_ptr<Gdiplus::Graphics> g(Gdiplus::Graphics::FromHWND(hwnd));
         RECT rc{};
         GetClientRect(hwnd, &rc);
 
         if (auto parent = node->GetParent().lock()) {
             auto bkColor = parent->GetValue<ShadowNode::BackgroundProperty>();
-            if (bkColor.has_value()) {
-                auto oldDCBrushColor = SetDCBrushColor(dc, bkColor.value());
-                FillRect(dc, &rc, (HBRUSH)GetStockObject(DC_BRUSH));
-                SetDCBrushColor(dc, oldDCBrushColor);
-            }
-            else {
-                FillRect(dc, &rc, (HBRUSH)(COLOR_WINDOW + 1));
-            }
+            Gdiplus::SolidBrush brush(Gdiplus::Color(bkColor.has_value() ? bkColor.value() : GetSysColor(COLOR_WINDOW)));
+            g->FillRectangle(&brush, Gdiplus::Rect{ rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top });
         }
         else {
             // the parent is gone...
         }
-        EndPaint(hwnd, &ps);
+
         return 0;
+    }
     }
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }

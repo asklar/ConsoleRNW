@@ -220,6 +220,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     LoadStringW(hInstance, IDC_RNWWIN32, szWindowClass, MAX_LOADSTRING);
     MyRegisterClass(hInstance);
 
+
+    ULONG_PTR gdiplusToken;
+    Gdiplus::GdiplusStartupInput gdiplusStartupInput{};
+    Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, nullptr);
+
     // Perform application initialization:
     HWND hwnd;
     if (!InitInstance (hInstance, nCmdShow, hwnd))
@@ -267,6 +272,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
     }
     KillTimer(hwnd, 1);
+    Gdiplus::GdiplusShutdown(gdiplusToken);
     return (int) msg.wParam;
 }
 

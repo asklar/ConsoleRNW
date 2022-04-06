@@ -6,9 +6,16 @@
 void AssertTag(bool, DWORD) {}
 using namespace winrt::Microsoft::ReactNative;
 
+PaperUIManager::PaperUIManager()
+{
+	OutputDebugStringA(fmt::format("{} PaperUIManager ctor\n", GetTickCount64()).c_str());
+	//Gdiplus::GdiplusStartupInput gdiplusStartupInput{};
+	//Gdiplus::GdiplusStartup(&m_gdiplusToken, &gdiplusStartupInput, nullptr);
+}
 
 PaperUIManager::~PaperUIManager()
 {
+	//Gdiplus::GdiplusShutdown(m_gdiplusToken);
 }
 
 
