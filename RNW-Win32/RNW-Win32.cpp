@@ -144,7 +144,7 @@ fire_and_forget Start() {
 
     // WebDebugger will not work since we are using JSI / TurboModules for PaperUIManager
     s.UseWebDebugger(false); 
-#ifdef _DEBUG
+#if defined(_DEBUG)
     s.UseFastRefresh(true);
 #else
 

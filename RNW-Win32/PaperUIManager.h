@@ -24,6 +24,10 @@ struct PaperUIManager final : std::enable_shared_from_this<PaperUIManager> {
     PaperUIManager(const PaperUIManager&) = delete;
     ~PaperUIManager();
 
+    static std::shared_ptr<PaperUIManager> GetFromContext(winrt::Microsoft::ReactNative::IReactContext ctx) {
+        auto uimgr = *winrt::Microsoft::ReactNative::ReactPropertyBag(ctx.Properties()).Get(UIManagerProperty());
+        return uimgr;
+    }
     REACT_INIT(Initialize)
         void Initialize(winrt::Microsoft::ReactNative::ReactContext const& reactContext) noexcept;
 
@@ -166,16 +170,18 @@ struct PaperUIManager final : std::enable_shared_from_this<PaperUIManager> {
         };
         return _value;
     }
+
+    HWND RootHWND() const { return m_nodes.at(m_rootTag)->window; }
 private:
     winrt::Microsoft::ReactNative::ReactContext m_context;
 
 
     YGConfigRef m_yogaConfig{ YGConfigNew() };
 
-    std::map<int64_t, std::unique_ptr<ShadowNode>> m_nodes;
+    std::map<int64_t, std::shared_ptr<ShadowNode>> m_nodes;
 
-    HWND TagToHWND(int64_t);
-    int64_t HWNDToTag(HWND hwnd);
+    HWND TagToHWND(int64_t) const;
+    int64_t HWNDToTag(HWND hwnd) const;
     int64_t m_rootTag{};
 
     void DirtyYogaNode(int64_t tag);
@@ -183,4 +189,12 @@ private:
     std::unordered_map<std::string, std::unique_ptr<IWin32ViewManager>> m_viewManagers{};
     void EnsureViewManager(const std::string& viewManagerName);
 
+    void Invalidate(HWND hwnd) const {
+        // some properties can require us to redraw our parent, e.g. changing borderRadius 
+        // to a higher value (sharper curves) in fast refresh would leave a sliver of the border painted the old color, 
+        // since we don't erase the background. So, redraw the parent.
+        
+        RedrawWindow(TagToHWND(m_rootTag), nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
+        //RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE);
+    }
 };

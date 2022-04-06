@@ -10,6 +10,7 @@ ViewViewManager::ViewViewManager(winrt::Microsoft::ReactNative::ReactContext ctx
     wcex.hInstance = nullptr;
     wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wcex.lpszClassName = L"RCTView";
+    wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 
     wcex.lpfnWndProc = ViewWndProc;
     RegisterClassEx(&wcex);
@@ -67,11 +68,12 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
         auto bkColor = node->GetValue<ShadowNode::BackgroundProperty>();
 
         if (bkColor.has_value()) {
-            SetDCBrushColor(dc, bkColor.value());
+            auto old = SetDCBrushColor(dc, bkColor.value());
             auto borderRadius = node->GetValueOrDefault<ShadowNode::BorderRadiusProperty>();
             auto rgn = CreateRoundRectRgn(rc.left, rc.top, rc.right, rc.bottom, borderRadius, borderRadius);
             FillRgn(dc, rgn, (HBRUSH)GetStockObject(DC_BRUSH));
             DeleteObject(rgn);
+            SetDCBrushColor(dc, old);
         }
 
         wchar_t str[100]{};
@@ -87,7 +89,27 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
         break;
     }
     case WM_ERASEBKGND:
-        return 0; // handle background in WM_PAINT
+        PAINTSTRUCT ps{};
+        auto dc = BeginPaint(hwnd, &ps);
+        RECT rc{};
+        GetClientRect(hwnd, &rc);
+
+        if (auto parent = node->GetParent().lock()) {
+            auto bkColor = parent->GetValue<ShadowNode::BackgroundProperty>();
+            if (bkColor.has_value()) {
+                auto oldDCBrushColor = SetDCBrushColor(dc, bkColor.value());
+                FillRect(dc, &rc, (HBRUSH)GetStockObject(DC_BRUSH));
+                SetDCBrushColor(dc, oldDCBrushColor);
+            }
+            else {
+                FillRect(dc, &rc, (HBRUSH)(COLOR_WINDOW + 1));
+            }
+        }
+        else {
+            // the parent is gone...
+        }
+        EndPaint(hwnd, &ps);
+        return 0;
     }
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }

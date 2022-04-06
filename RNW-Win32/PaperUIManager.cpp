@@ -227,7 +227,7 @@ void PaperUIManager::createView(
 		const auto& vm = m_viewManagers[viewName];
         auto hwnd = vm->Create(reactTag, rootTag, TagToHWND(rootTag), props);
         IWin32ViewManager::SetTag(hwnd, reactTag);
-        auto result = m_nodes.emplace(reactTag, std::make_unique<ShadowNode>(hwnd, m_yogaConfig, vm.get()));
+        auto result = m_nodes.emplace(reactTag, std::make_shared<ShadowNode>(hwnd, m_yogaConfig, vm.get()));
         if (result.second) {
             auto shadowNode = result.first->second.get();
             SetWindowLongPtrW(hwnd, 0, reinterpret_cast<LONG_PTR>(shadowNode));
@@ -245,7 +245,7 @@ void PaperUIManager::createView(
         }
         vm->UpdateProperties(reactTag, hwnd, props);
 
-		RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE);
+		Invalidate(hwnd);
     });
 	
 }
@@ -255,7 +255,7 @@ void PaperUIManager::updateView(double reactTag, std::string viewName, winrt::Mi
     auto tag = static_cast<int64_t>(reactTag);
 	auto hwnd = m_nodes[tag]->window;
     m_viewManagers[viewName]->UpdateProperties(tag, hwnd, props);
-	RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE);
+	Invalidate(hwnd);
 	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
 	//	[uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), props = std::move(props)]() mutable
 	//{
@@ -433,11 +433,11 @@ void PaperUIManager::removeRootView(double reactTag) noexcept
 	//});
 }
 
-int64_t PaperUIManager::HWNDToTag(HWND hwnd) {
+int64_t PaperUIManager::HWNDToTag(HWND hwnd) const {
 	return IWin32ViewManager::GetTag(hwnd);
 }
 
-HWND PaperUIManager::TagToHWND(int64_t tag) {
+HWND PaperUIManager::TagToHWND(int64_t tag) const {
 	return m_nodes.count(tag) != 0 ? m_nodes.at(tag)->window : 0;
 }
 
@@ -445,6 +445,7 @@ void PaperUIManager::setChildren(double containerTag, winrt::Microsoft::ReactNat
 {
 	winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [this, containerTag = static_cast<int64_t>(containerTag), reactTags = std::move(reactTags)]() mutable
 	{
+		auto parentNode = m_nodes[containerTag];
 		if (auto parentHwnd = TagToHWND(containerTag)) {
             uint32_t index = 0;
 			for (auto const& child : reactTags) {
@@ -452,6 +453,7 @@ void PaperUIManager::setChildren(double containerTag, winrt::Microsoft::ReactNat
 				if (auto childHwnd = TagToHWND(childTag)) {
                     auto oldParentWnd = GetParent(childHwnd);
                     SetParent(childHwnd, parentHwnd);
+					m_nodes[childTag]->m_parent = parentNode;
                     const auto& childNode = m_nodes[childTag]->yogaNode;
                     if (auto oldParentTag = HWNDToTag(oldParentWnd)) {
                         YGNodeRemoveChild(m_nodes[oldParentTag]->yogaNode.get(), childNode.get());
@@ -528,10 +530,49 @@ void PaperUIManager::dismissPopupMenu() noexcept
 void PaperUIManager::AddMeasuredRootView(Win32ReactRootView* root) {
 	auto rootHwnd = root->Window();
 	assert(rootHwnd != nullptr);
-	m_nodes.emplace(root->Tag(), std::make_unique<ShadowNode>(rootHwnd, m_yogaConfig, nullptr));
+	m_nodes.emplace(root->Tag(), std::make_shared<ShadowNode>(rootHwnd, m_yogaConfig, nullptr));
 	m_rootTag = root->Tag();
 	DoLayout();
 }
 
+REACT_STRUCT(ShowAlertArgs)
+struct ShowAlertArgs {
+	REACT_FIELD(title)
+		std::string title;
+
+	REACT_FIELD(message)
+		std::string message;
+
+	REACT_FIELD(buttonPositive)
+		std::string buttonPositive;
+
+	REACT_FIELD(buttonNegative)
+		std::string buttonNegative;
+
+	REACT_FIELD(buttonNeutral)
+		std::string buttonNeutral;
+
+	REACT_FIELD(defaultButton)
+		int defaultButton;
+};
 
 
+
+REACT_MODULE(Alert)
+struct Alert : public std::enable_shared_from_this<Alert> {
+	REACT_INIT(Initialize)
+		void Initialize(React::ReactContext const& reactContext) noexcept { m_context = reactContext; }
+
+	REACT_METHOD(showAlert)
+		void showAlert(ShowAlertArgs const& args, std::function<void(std::string)> result) noexcept;
+
+private:
+	React::ReactContext m_context;
+};
+
+
+void Alert::showAlert(ShowAlertArgs const& args, std::function<void(std::string)> result) noexcept {
+	auto uimgr = PaperUIManager::GetFromContext(m_context.Handle());
+	auto res= MessageBoxA(uimgr->RootHWND(), args.message.c_str(), args.title.c_str(), MB_OK);
+	result(res == IDOK ? "positive" : "negative");
+}
