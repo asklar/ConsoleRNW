@@ -29,6 +29,8 @@
     <AutolinkCommandWorkingDir>$(MSBuildThisFileDirectory)\..\example</AutolinkCommandWorkingDir>
     <ReactNativeWindowsDir>$(MSBuildThisFileDirectory)\..\example\node_modules\react-native-windows\</ReactNativeWindowsDir>
     <RunAutolinkCheck>false</RunAutolinkCheck>
+    <BundleCommandWorkingDir>..\example</BundleCommandWorkingDir>
+    <BundleOutputPath>$(MSBuildThisFileDirectory)</BundleOutputPath>
     <!-- <UseExperimentalNuget>true</UseExperimentalNuget> -->
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
