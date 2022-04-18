@@ -34,6 +34,7 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringProperty
     }
     
     std::weak_ptr<ShadowNode> m_parent;
+    std::vector<std::weak_ptr<ShadowNode>> m_children;
     IWin32ViewManager* m_vm{nullptr};
     bool m_isMouseOver{ false };
 

@@ -127,12 +127,14 @@ enum class StringPropertyIndex {
 
 template<typename TStringIndexEnum>
 struct StringStorage {
-    std::unordered_map<TStringIndexEnum, std::string> m_strings;
+    std::unordered_map<TStringIndexEnum, std::wstring> m_strings;
 };
 
 template<StringPropertyIndex index>
 struct StringProperty {
-    static std::optional<std::string> Get(StringStorage<StringPropertyIndex>& storage) {
+    using type = std::wstring_view;
+
+    static std::optional<std::wstring> Get(StringStorage<StringPropertyIndex>& storage) {
         const auto& v = storage.m_strings.find(index);
         if (v != storage.m_strings.end()) {
             return v->second;
@@ -142,20 +144,20 @@ struct StringProperty {
         }
     }
 
-    static std::optional<std::string> Get(StringStorage<StringPropertyIndex>* storage) {
+    static std::optional<std::wstring> Get(StringStorage<StringPropertyIndex>* storage) {
         return Get(*storage);
     }
 
-    static void Set(StringStorage<StringPropertyIndex>& storage, std::string_view value) {
-        storage.m_strings[static_cast<int>(index)] = value;
+    static void Set(StringStorage<StringPropertyIndex>& storage, std::wstring_view value) {
+        storage.m_strings[index] = value;
     }
 
-    static void Set(StringStorage<StringPropertyIndex>* storage, std::string_view value) {
+    static void Set(StringStorage<StringPropertyIndex>* storage, std::wstring_view value) {
         return Set(*storage, value);
     }
 
     static void Clear(StringStorage<StringPropertyIndex>& storage) {
-        storage.m_strings.erase(static_cast<int>(index));
+        storage.m_strings.erase(index);
     }
 };
 

@@ -48,24 +48,24 @@ const App = () => {
 
   const [bgColor, setBgColor] = React.useState('red');
   return (
-    <View
-      style={{
-        width: 400,
-        height: 200,
-        backgroundColor: bgColor,
-        borderRadius: 10,
-      }}
-      onMouseEnter={e => {
-        setBgColor('green');
-        console.log(`ON MOUSE ENTER! ${JSON.stringify(e.nativeEvent)}`);
-      }}
-      onMouseLeave={e => {
-        setBgColor('red')
-        console.log(`MOUSE LEAVE`);
-      }}
-      test123={3}>
-      <Text>Hello world</Text>
-    </View>
+//    <View
+//      style={{
+//        width: 200,
+//        height: 200,
+//        backgroundColor: bgColor,
+//        borderRadius: 100,
+//      }}
+//      onMouseEnter={e => {
+//          setBgColor('green');
+//        /*  alert(`ON MOUSE ENTER! ${JSON.stringify(e.nativeEvent)}`);*/
+//      }}
+//      onMouseLeave={e => {
+//        setBgColor('red')
+////        alert(`MOUSE LEAVE`);
+//      }}
+//      >
+      <Text style={{ width: 200, height: 50, margin: 20, backgroundColor: "red"}}>Hello world</Text>
+    //</View>
   );
 };
 

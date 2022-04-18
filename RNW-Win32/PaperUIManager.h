@@ -194,7 +194,7 @@ private:
         // to a higher value (sharper curves) in fast refresh would leave a sliver of the border painted the old color, 
         // since we don't erase the background. So, redraw the parent.
         
-        RedrawWindow(TagToHWND(m_rootTag), nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
+        RedrawWindow(TagToHWND(m_rootTag), nullptr, nullptr, RDW_ERASE | RDW_INVALIDATE | RDW_ALLCHILDREN);
         //RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE);
     }
 };

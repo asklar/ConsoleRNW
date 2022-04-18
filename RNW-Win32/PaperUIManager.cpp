@@ -47,10 +47,11 @@ void PaperUIManager::EnsureViewManager(const std::string& viewManagerName) {
 			std::unique_ptr<IWin32ViewManager>(*make)(winrt::Microsoft::ReactNative::ReactContext);
 		};
 		static constexpr const ViewManagerFactory viewMgrFactory[] = {
-			{ "RCTView", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context)); }},
-			{ "RCTVirtualText", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context)); }},
-			{ "RCTRawText", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context)); }},
-			{ "RCTText", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context)); }},
+			{ "RCTView", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context, ViewKind::View)); }},
+			{ "RCTVirtualText", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context, ViewKind::View)); }},
+			{ "RCTRawText", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context, ViewKind::RawText)); }},
+			{ "RCTText", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context, ViewKind::Text)); }},
+			{ "Text", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context, ViewKind::Text)); }},
 		};
 		const auto& entry = std::find_if(std::begin(viewMgrFactory), std::end(viewMgrFactory), [&viewManagerName](const auto& i) { return i.name == viewManagerName; });
 		m_viewManagers[viewManagerName] = entry->make(m_context);
@@ -206,7 +207,8 @@ void PaperUIManager::DoLayout() {
 		// no size
 	}
 	else {
-		SetWindowPos(shadowNode->window, nullptr, left, top, width, height, SWP_NOZORDER);
+		shadowNode->m_vm->UpdateLayout(shadowNode.get(), left, top, width, height);
+		
 	}
   }
 }
@@ -255,6 +257,9 @@ void PaperUIManager::updateView(double reactTag, std::string viewName, winrt::Mi
     auto tag = static_cast<int64_t>(reactTag);
 	auto hwnd = m_nodes[tag]->window;
     m_viewManagers[viewName]->UpdateProperties(tag, hwnd, props);
+	auto shadowNode = m_nodes[tag];
+	StyleYogaNode(*shadowNode, shadowNode->yogaNode.get(), props);
+
 	Invalidate(hwnd);
 	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
 	//	[uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), props = std::move(props)]() mutable
@@ -450,13 +455,22 @@ void PaperUIManager::setChildren(double containerTag, winrt::Microsoft::ReactNat
             uint32_t index = 0;
 			for (auto const& child : reactTags) {
                 auto childTag = child.AsInt64();
+				auto node = m_nodes[childTag];
 				if (auto childHwnd = TagToHWND(childTag)) {
                     auto oldParentWnd = GetParent(childHwnd);
                     SetParent(childHwnd, parentHwnd);
-					m_nodes[childTag]->m_parent = parentNode;
-                    const auto& childNode = m_nodes[childTag]->yogaNode;
+					node->m_parent = parentNode;
+					parentNode->m_children.push_back(node);
+					OutputDebugStringW(fmt::format(L"child {} -> parent {}\n", childTag, containerTag).c_str());
+                    const auto& childNode = node->yogaNode;
                     if (auto oldParentTag = HWNDToTag(oldParentWnd)) {
                         YGNodeRemoveChild(m_nodes[oldParentTag]->yogaNode.get(), childNode.get());
+						auto& children = m_nodes[oldParentTag]->m_children;
+						auto it = std::find_if(children.cbegin(), children.cend(),
+							[&node](const std::weak_ptr<ShadowNode>& other) {
+							return !other.expired() && node == other.lock();
+						});
+						children.erase(it);
                     }
                     YGNodeInsertChild(m_nodes[containerTag]->yogaNode.get(), childNode.get(), index);
                     index++;
