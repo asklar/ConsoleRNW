@@ -97,7 +97,7 @@ struct Win32ReactViewInstance : winrt::implements<Win32ReactViewInstance, Micros
         m_context = context;
     }
 
-    void UpdateRootView(winrt::Microsoft::ReactNative::ReactInstanceState state) {
+    void UpdateRootView() {
 
     }
 
