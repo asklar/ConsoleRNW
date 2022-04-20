@@ -206,6 +206,9 @@
       <Project>{a9d95a91-4db7-4f72-beb6-fe8a5c89bfbd}</Project>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="app.manifest" />
+  </ItemGroup>
   <ItemDefinitionGroup>
     <ClCompile>
       <CallingConvention>StdCall</CallingConvention>

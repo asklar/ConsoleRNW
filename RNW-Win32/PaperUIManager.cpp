@@ -44,17 +44,18 @@ void PaperUIManager::EnsureViewManager(const std::string& viewManagerName) {
 
 		struct ViewManagerFactory {
 			std::string_view name;
-			std::unique_ptr<IWin32ViewManager>(*make)(winrt::Microsoft::ReactNative::ReactContext);
+			std::unique_ptr<IWin32ViewManager>(*make)(winrt::Microsoft::ReactNative::ReactContext, YGConfigRef yogaConfig);
 		};
 		static constexpr const ViewManagerFactory viewMgrFactory[] = {
-			{ "RCTView", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context, ViewKind::View)); }},
-			{ "RCTVirtualText", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context, ViewKind::View)); }},
-			{ "RCTRawText", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context, ViewKind::RawText)); }},
-			{ "RCTText", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context, ViewKind::Text)); }},
-			{ "Text", [](winrt::Microsoft::ReactNative::ReactContext context) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context, ViewKind::Text)); }},
+			{ "RCTView", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef yogaConfig) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context, ViewKind::View, yogaConfig)); }},
+			{ "RCTVirtualText", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef yogaConfig) { return std::unique_ptr<IWin32ViewManager>(new ViewViewManager(context, ViewKind::View, yogaConfig)); }},
+			{ "RCTRawText", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef yogaConfig) { return std::unique_ptr<IWin32ViewManager>(new RawTextViewManager(context, yogaConfig)); }},
+			{ "RCTText", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef yogaConfig) { return std::unique_ptr<IWin32ViewManager>(new TextViewManager(context, yogaConfig)); }},
+			{ "Text", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef yogaConfig) { return std::unique_ptr<IWin32ViewManager>(new TextViewManager(context, yogaConfig)); }},
+			{ "RCTButton", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ButtonViewManager(context, ycr)); }},
 		};
 		const auto& entry = std::find_if(std::begin(viewMgrFactory), std::end(viewMgrFactory), [&viewManagerName](const auto& i) { return i.name == viewManagerName; });
-		m_viewManagers[viewManagerName] = entry->make(m_context);
+		m_viewManagers[viewManagerName] = entry->make(m_context, m_yogaConfig);
 
 	}
 }
@@ -99,14 +100,13 @@ void PaperUIManager::onBatchCompleted() noexcept {
 
 
 void PaperUIManager::DirtyYogaNode(int64_t tag) {
+	OutputDebugStringA(fmt::format("Dirty {}\n", tag).c_str());
     auto& pShadowNodeChild = m_nodes[tag];
     if (pShadowNodeChild != nullptr) {
-        /*
-        auto* pViewManager = pShadowNodeChild->GetViewManager();
-        YGMeasureFunc func = pViewManager->GetYogaCustomMeasureFunc();
-        if (func != nullptr) {
+        auto* pViewManager = pShadowNodeChild->m_vm;
+        if (YGMeasureFunc func = pViewManager->GetCustomMeasureFunction()) {
             // If there is a yoga node for this tag mark it as dirty
-            YGNodeRef yogaNodeChild = GetYogaNode(tag);
+			YGNodeRef yogaNodeChild = pShadowNodeChild->yogaNode.get();
             if (yogaNodeChild != nullptr) {
                 // Retrieve and dirty the yoga node
                 YGNodeMarkDirty(yogaNodeChild);
@@ -118,11 +118,9 @@ void PaperUIManager::DirtyYogaNode(int64_t tag) {
         }
 
         // Since this node didn't meet the criteria, jump to parent in case it does
-        int64_t parentTag = pShadowNodeChild->GetParent();
-        if (parentTag >= 0)
-            DirtyYogaNode(parentTag);
-
-            */
+		auto parent_weak = pShadowNodeChild->m_parent;
+		if (auto parent = parent_weak.lock())
+			DirtyYogaNode(IWin32ViewManager::GetTag(parent->window));
     }
 }
 
@@ -148,20 +146,19 @@ void PaperUIManager::UpdateExtraLayout(int64_t tag) {
 }
 
 void PaperUIManager::DoLayout() {
-	/*
+	
 	// Process vector of RN controls needing extra layout here.
   const auto extraLayoutNodes = m_extraLayoutNodes;
   for (const int64_t tag : extraLayoutNodes) {
-    ShadowNodeBase *node = static_cast<ShadowNodeBase *>(m_host->FindShadowNodeForTag(tag));
-    if (node) {
-      auto element = node->GetView().as<xaml::FrameworkElement>();
-      element.UpdateLayout();
+    if (auto node = m_nodes[tag]) {
+      auto element = node->window;
+      // TODO: Measure
     }
   }
   // Values need to be cleared from the vector before next call to DoLayout.
   m_extraLayoutNodes.clear();
 
-  */
+  
 
   // auto &rootTags = m_host->GetAllRootTags();
 	std::vector<int64_t> rootTags{ m_rootTag };
@@ -213,41 +210,35 @@ void PaperUIManager::DoLayout() {
   }
 }
 
-
 void PaperUIManager::createView(
 	double reactTag, // How come these cannot be int64_t?
 	std::string viewName,
 	double rootTag,
 	winrt::Microsoft::ReactNative::JSValueObject&& props) noexcept
 {
-	OutputDebugStringA(fmt::format("{} createView\n", GetTickCount64()).c_str());
+	OutputDebugStringA(fmt::format("{} createView {} {}\n", GetTickCount64(), viewName, reactTag).c_str());
 
     winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
         [this, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), rootTag = static_cast<int64_t>(rootTag), props = std::move(props)]() mutable
     {
 		EnsureViewManager(viewName);
 		const auto& vm = m_viewManagers[viewName];
-        auto hwnd = vm->Create(reactTag, rootTag, TagToHWND(rootTag), props);
-        IWin32ViewManager::SetTag(hwnd, reactTag);
-        auto result = m_nodes.emplace(reactTag, std::make_shared<ShadowNode>(hwnd, m_yogaConfig, vm.get()));
+        auto shadowNode = vm->Create(reactTag, rootTag, TagToHWND(rootTag), props);
+
+        auto result = m_nodes.emplace(reactTag, shadowNode);
         if (result.second) {
-            auto shadowNode = result.first->second.get();
-            SetWindowLongPtrW(hwnd, 0, reinterpret_cast<LONG_PTR>(shadowNode));
+            SetWindowLongPtrW(shadowNode->window, 0, reinterpret_cast<LONG_PTR>(shadowNode.get()));
 
             StyleYogaNode(*shadowNode, shadowNode->yogaNode.get(), props);
-            /*
-            YGMeasureFunc func = pViewManager->GetYogaCustomMeasureFunc();
-            if (func != nullptr) {
-                YGNodeSetMeasureFunc(yogaNode, func);
 
-                auto context = std::make_unique<Microsoft::ReactNative::YogaContext>(node.GetView());
-                YGNodeSetContext(yogaNode, reinterpret_cast<void*>(context.get()));
+			if (auto func = vm->GetCustomMeasureFunction()) {
+                YGNodeSetMeasureFunc(shadowNode->yogaNode.get(), func);
+
+				YGNodeSetContext(shadowNode->yogaNode.get(), reinterpret_cast<void*>(shadowNode.get()));
             }
-            */
         }
-        vm->UpdateProperties(reactTag, hwnd, props);
-
-		Invalidate(hwnd);
+        vm->UpdateProperties(reactTag, shadowNode, props);
+		Invalidate(shadowNode->window);
     });
 	
 }
@@ -255,12 +246,11 @@ void PaperUIManager::createView(
 void PaperUIManager::updateView(double reactTag, std::string viewName, winrt::Microsoft::ReactNative::JSValueObject&& props) noexcept
 {
     auto tag = static_cast<int64_t>(reactTag);
-	auto hwnd = m_nodes[tag]->window;
-    m_viewManagers[viewName]->UpdateProperties(tag, hwnd, props);
 	auto shadowNode = m_nodes[tag];
+    m_viewManagers[viewName]->UpdateProperties(tag, shadowNode, props);
 	StyleYogaNode(*shadowNode, shadowNode->yogaNode.get(), props);
 
-	Invalidate(hwnd);
+	Invalidate(shadowNode->window);
 	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
 	//	[uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), props = std::move(props)]() mutable
 	//{
@@ -451,32 +441,41 @@ void PaperUIManager::setChildren(double containerTag, winrt::Microsoft::ReactNat
 	winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [this, containerTag = static_cast<int64_t>(containerTag), reactTags = std::move(reactTags)]() mutable
 	{
 		auto parentNode = m_nodes[containerTag];
-		if (auto parentHwnd = TagToHWND(containerTag)) {
-            uint32_t index = 0;
-			for (auto const& child : reactTags) {
-                auto childTag = child.AsInt64();
-				auto node = m_nodes[childTag];
-				if (auto childHwnd = TagToHWND(childTag)) {
-                    auto oldParentWnd = GetParent(childHwnd);
-                    SetParent(childHwnd, parentHwnd);
-					node->m_parent = parentNode;
-					parentNode->m_children.push_back(node);
-					OutputDebugStringW(fmt::format(L"child {} -> parent {}\n", childTag, containerTag).c_str());
-                    const auto& childNode = node->yogaNode;
-                    if (auto oldParentTag = HWNDToTag(oldParentWnd)) {
-                        YGNodeRemoveChild(m_nodes[oldParentTag]->yogaNode.get(), childNode.get());
-						auto& children = m_nodes[oldParentTag]->m_children;
-						auto it = std::find_if(children.cbegin(), children.cend(),
-							[&node](const std::weak_ptr<ShadowNode>& other) {
-							return !other.expired() && node == other.lock();
-						});
-						children.erase(it);
-                    }
-                    YGNodeInsertChild(m_nodes[containerTag]->yogaNode.get(), childNode.get(), index);
-                    index++;
-				}
+
+		auto isNativeControlWithSelfLayout = parentNode->m_vm && parentNode->m_vm->GetCustomMeasureFunction() != nullptr;
+		
+		uint32_t index = 0;
+		for (auto const& child : reactTags) {
+			auto childTag = child.AsInt64();
+			auto node = m_nodes[childTag];
+			auto oldParent = node->m_parent.lock();
+			//auto oldParentHWND = oldParent ? oldParent->window : nullptr;
+			node->m_parent = parentNode;
+			parentNode->m_children.push_back(node);
+			OutputDebugStringW(fmt::format(L"child {} -> parent {}\n", childTag, containerTag).c_str());
+			const auto& childNode = node->yogaNode;
+
+			if (auto childHwnd = node->window) {
+				SetParent(childHwnd, parentNode->window);
 			}
+			if (oldParent) {
+				if (!isNativeControlWithSelfLayout) {
+					YGNodeRemoveChild(oldParent->yogaNode.get(), childNode.get());
+				}
+				auto& children = oldParent->m_children;
+				auto it = std::find_if(children.cbegin(), children.cend(),
+					[&node](const std::weak_ptr<ShadowNode>& other) {
+						return !other.expired() && node == other.lock();
+					});
+				children.erase(it);
+			}
+			if (!isNativeControlWithSelfLayout) {
+				YGNodeInsertChild(m_nodes[containerTag]->yogaNode.get(), childNode.get(), index);
+				index++;
+			}
+
 		}
+
 		DoLayout();
 	});
 }

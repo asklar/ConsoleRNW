@@ -172,6 +172,9 @@ struct PaperUIManager final : std::enable_shared_from_this<PaperUIManager> {
     }
 
     HWND RootHWND() const { return m_nodes.at(m_rootTag)->window; }
+
+    void DirtyYogaNode(int64_t tag);
+
 private:
     winrt::Microsoft::ReactNative::ReactContext m_context;
 
@@ -184,7 +187,7 @@ private:
     int64_t HWNDToTag(HWND hwnd) const;
     int64_t m_rootTag{};
 
-    void DirtyYogaNode(int64_t tag);
+    std::vector<int64_t> m_extraLayoutNodes;
 
     std::unordered_map<std::string, std::unique_ptr<IWin32ViewManager>> m_viewManagers{};
     void EnsureViewManager(const std::string& viewManagerName);
