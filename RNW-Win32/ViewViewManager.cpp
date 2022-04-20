@@ -158,7 +158,7 @@ ViewViewManager::~ViewViewManager() {
 }
 
 std::shared_ptr<ShadowNode> ViewViewManager::Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props) {
-	auto tag = fmt::format(L"This is a View! its react tag is: {}", reactTag);
+	auto tag = fmt::format(L"{}: {}", GetWindowClassName(), reactTag);
 	auto hwnd = CreateWindow(GetWindowClassName(), tag.c_str(), WS_CHILD | WS_VISIBLE,
 		0, 0, 0, 0,
 		rootHWnd, nullptr, nullptr, nullptr);
