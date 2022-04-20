@@ -95,6 +95,12 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
 		}
 		break;
 	}
+	case WM_LBUTTONDOWN: {
+		if (node->GetValueOrParent<ShadowNode::OnPressProperty>()) {
+			node->m_vm->EmitEvent("topClick", tag, MouseEventArgs(tag, wParam, lParam));
+		}
+		return 0;
+	}
 	case WM_MOUSEMOVE: {
 		if (!node->WantsMouseMove()) {
 			__noop;
@@ -199,10 +205,12 @@ struct ViewManagerProperties {
 				// ButtonBackgroundPointerOver
 				// ButtonBorderBrushPointerOver
 				static constexpr std::pair<const char*, int> color_map[] = {
-					{ "ButtonForeground", COLOR_WINDOWTEXT },
-					{ "ButtonBackground", COLOR_WINDOW },
+					{ "ButtonForeground", COLOR_BTNTEXT },
+					{ "ButtonBackground", COLOR_BTNFACE },
 					{ "ButtonForegroundPointerOver", COLOR_HIGHLIGHTTEXT },
 					{ "ButtonBackgroundPointerOver", COLOR_HIGHLIGHT },
+					{ "ButtonForegroundPressed", COLOR_WINDOWTEXT },
+					{ "ButtonBackgroundPressed", COLOR_WINDOW },
 				};
 
 				if (auto c = std::find_if(color_map, color_map + std::size(color_map),
@@ -291,6 +299,8 @@ struct ViewProperties : ViewManagerProperties<ViewProperties> {
 		{ "borderWidth", Set<ShadowNode::BorderWidthProperty> },
 		{ "onMouseEnter", Set<ShadowNode::OnMouseEnterProperty> },
 		{ "onMouseLeave", Set<ShadowNode::OnMouseLeaveProperty> },
+		//{ "onPress", Set<ShadowNode::OnPressProperty> },
+		{ "onClick", Set<ShadowNode::OnPressProperty> },
 		{ "text", Set<ShadowNode::TextProperty>, true },
 	};
 };
@@ -327,6 +337,7 @@ winrt::Microsoft::ReactNative::JSValueObject ViewViewManager::GetConstants() {
 					{ "onClick", "function" },
 					{ "onMouseEnter", "function" },
 					{ "onMouseLeave", "function" },
+					{ "onPress", "function" },
 					{ "focusable", "boolean" },
 					{ "enableFocusRing", "boolean" },
 					{ "tabIndex", "number" },
@@ -339,6 +350,9 @@ winrt::Microsoft::ReactNative::JSValueObject ViewViewManager::GetConstants() {
 					}},
 					{ "topMouseLeave", JSValueObject {
 						{ "registrationName", "onMouseLeave" },
+					}},
+					{ "topClick", JSValueObject {
+						{ "registrationName", "onClick" },
 					}},
 				} },
 			}
@@ -359,6 +373,7 @@ JSValueObject RawTextViewManager::GetConstants() {
 			{ "onClick", "function" },
 			{ "onMouseEnter", "function" },
 			{ "onMouseLeave", "function" },
+			{ "onPress", "function" },
 			{ "focusable", "boolean" },
 			{ "enableFocusRing", "boolean" },
 			{ "tabIndex", "number" },
@@ -457,7 +472,7 @@ void ShadowNode::PaintForeground(HDC dc) {
 	auto bkColor = GetValue<ShadowNode::BackgroundProperty>();
 	RECT rc{};
 	GetClientRect(window, &rc);
-	static bool dbgShowReactTag = true;
+	static bool dbgShowReactTag = false;
 	if (dbgShowReactTag) {
 		auto bkOld = GetBkColor(dc);
 		{
@@ -492,9 +507,36 @@ void RawTextShadowNode::PaintForeground(HDC dc) {
 		}
 		auto textAlign = GetValueOrParent<ShadowNode::TextAlignProperty>();
 		constexpr static auto DefaultTextAlign = static_cast<TextAlign>(TA_LEFT | TA_TOP | TA_NOUPDATECP);
-		auto oldAlign = SetTextAlign(dc, static_cast<UINT>(textAlign.value_or(DefaultTextAlign)));
-		DrawText(dc, text.value().c_str(), -1, &m_rc, 0);
-		SetTextAlign(dc, oldAlign);
+		if (!textAlign.has_value()) {
+			textAlign = DefaultTextAlign;
+		}
+
+		//auto oldAlign = SetTextAlign(dc, static_cast<UINT>(textAlign.value_or(DefaultTextAlign)));
+
+		UINT format{};
+		if (*textAlign & TextAlign::Center) {
+			format |= DT_CENTER;
+		}
+		else if (*textAlign & TextAlign::Left) {
+			format |= DT_LEFT;
+		}
+		else if (*textAlign & TextAlign::Right) {
+			format |= DT_RIGHT;
+		}
+		if (*textAlign & TextAlign::Baseline) {
+			// etc.
+		}
+
+		RECT r;
+		GetWindowRect(Parent()->window, &r);
+		r.right -= r.left;
+		r.bottom -= r.top;
+		r.left = 0;
+		r.top = 0;
+		float scale = GetDpiForWindow(Parent()->window) / 96.0f;
+		//DrawText(dc, text.value().c_str(), -1, &r, 0);
+		DrawTextW(dc, text->c_str(), -1, &r, format);
+		//SetTextAlign(dc, oldAlign);
 		if (oldFont) {
 			SelectObject(dc, oldFont);
 		}

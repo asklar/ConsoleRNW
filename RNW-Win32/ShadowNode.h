@@ -53,7 +53,8 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringProperty
     
     using OnMouseEnterProperty = Property<bool, PropertyIndex::OnMouseEnter>;
     using OnMouseLeaveProperty = Property<bool, PropertyIndex::OnMouseLeave>;
-    
+    using OnPressProperty = Property<bool, PropertyIndex::OnPress>;
+
     using TextProperty = StringProperty<StringPropertyIndex::Text>;
     using TextAlignProperty = Property<TextAlign, PropertyIndex::TextAlign>;
     using FontSizeProperty = Property<float, PropertyIndex::FontSize>;

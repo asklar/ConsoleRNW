@@ -9,6 +9,10 @@ enum class TextAlign {
     Center = TA_CENTER,
 };
 
+inline bool operator&(TextAlign a, TextAlign b) {
+    return static_cast<std::underlying_type_t<TextAlign>>(a) & static_cast<std::underlying_type_t<TextAlign>>(b);
+}
+
 template<typename TPropertyEnum>
 struct PropertyStorage {
 private:
@@ -124,6 +128,7 @@ enum class PropertyIndex {
 
     OnMouseEnter,
     OnMouseLeave,
+    OnPress,
 
     FontSize,
     TextAlign,
