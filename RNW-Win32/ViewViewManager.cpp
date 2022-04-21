@@ -102,6 +102,7 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
 		return 0;
 	}
 	case WM_MOUSEMOVE: {
+		OutputDebugStringA(fmt::format("MouseMove isMouseOverAlready={} tag={} vmKind={}\n", node->m_isMouseOver, tag, typeid(*node->m_vm).name()).c_str());
 		if (!node->WantsMouseMove()) {
 			__noop;
 		}
@@ -120,6 +121,7 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
 	}
 	case WM_MOUSELEAVE: {
 		node->m_isMouseOver = false;
+		OutputDebugStringA(fmt::format("MouseLeave tag={} vmKind={}\n", tag, typeid(*node->m_vm).name()).c_str());
 		node->m_vm->EmitEvent("topMouseLeave", tag, MouseEventArgs(tag, wParam, lParam));
 		break;
 	}
