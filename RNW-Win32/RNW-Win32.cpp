@@ -340,6 +340,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
+#ifdef _DEBUG
+    case WM_KEYUP: {
+        if (wParam == VK_F2) {
+            PaperUIManager::GetFromContext(g_context.Handle())->PrintNodes();
+        }
+        break;
+    }
+#endif
     case WM_SIZE: {
         if (rootview) {
             rootview->OnLayoutChanged();

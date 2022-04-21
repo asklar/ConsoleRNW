@@ -2,7 +2,6 @@
 #include "ViewViewManager.h"
 #include "IWin32ViewManager.h"
 #include "PaperUIManager.h"
-#include <strsafe.h>
 
 using JSValueObject = winrt::Microsoft::ReactNative::JSValueObject;
 
@@ -20,15 +19,6 @@ const wchar_t* ViewViewManager::GetWindowClassName() const {
 }
 
 
-YGSize DefaultYogaSelfMeasureFunc(
-	YGNodeRef node,
-	float width,
-	YGMeasureMode widthMode,
-	float height,
-	YGMeasureMode heightMode) {
-	auto shadowNode = reinterpret_cast<ShadowNode*>(YGNodeGetContext(node));
-	return shadowNode->Measure(width, widthMode, height, heightMode);
-}
 
 ViewViewManager::ViewViewManager(winrt::Microsoft::ReactNative::ReactContext ctx, ViewKind kind, YGConfigRef yogaConfig) : IWin32ViewManager(ctx, yogaConfig), m_kind(kind) {
 	if (auto clsName = GetWindowClassName()) {
@@ -102,13 +92,15 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
 		return 0;
 	}
 	case WM_MOUSEMOVE: {
-		OutputDebugStringA(fmt::format("MouseMove isMouseOverAlready={} tag={} vmKind={}\n", node->m_isMouseOver, tag, typeid(*node->m_vm).name()).c_str());
+		//vm->GetUIManager()->PrintNodes();
+		
+		OutputDebugStringA(fmt::format("MouseMove tag={} vmKind={}\n", tag, typeid(*node->m_vm).name()).c_str());
 		if (!node->WantsMouseMove()) {
 			__noop;
 		}
 		else {
-			if (!node->m_isMouseOver && node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>()) {
-				node->m_isMouseOver = true;
+			if (!node->GetValue<ShadowNode::IsMouseOverProperty>() && node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>()) {
+				node->SetValue<ShadowNode::IsMouseOverProperty>(true);
 				TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd };
 				TrackMouseEvent(&tme);
 
@@ -120,7 +112,7 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
 		break;
 	}
 	case WM_MOUSELEAVE: {
-		node->m_isMouseOver = false;
+		node->SetValue<ShadowNode::IsMouseOverProperty>(false);
 		OutputDebugStringA(fmt::format("MouseLeave tag={} vmKind={}\n", tag, typeid(*node->m_vm).name()).c_str());
 		node->m_vm->EmitEvent("topMouseLeave", tag, MouseEventArgs(tag, wParam, lParam));
 		break;
@@ -188,124 +180,6 @@ std::shared_ptr<ShadowNode> ViewViewManager::Create(int64_t reactTag, int64_t ro
 
 
 
-template<typename TProperties>
-struct ViewManagerProperties {
-	template<typename TProperty>
-	static void Set(ShadowNode* node, const winrt::Microsoft::ReactNative::JSValue& value) {
-		if constexpr (std::is_same_v<typename TProperty::type, COLORREF>) {
-			COLORREF colorRef{};
-			if (auto argb = value.TryGetInt64()) {
-				auto rgb = static_cast<uint32_t>(*argb) & 0x00ffffff; //ignore alpha
-				colorRef = RGB(rgb >> 16, (rgb >> 8) & 0xff, rgb & 0xff);
-			} else if (auto obj = value.TryGetObject()) {
-				auto brushName = obj->at("windowsbrush").AsJSString();
-				// TODO: map strings to colors: 
-				// ButtonForeground
-				// ButtonBackground
-				// ButtonBorderBrush
-				// ButtonForegroundPointerOver
-				// ButtonBackgroundPointerOver
-				// ButtonBorderBrushPointerOver
-				static constexpr std::pair<const char*, int> color_map[] = {
-					{ "ButtonForeground", COLOR_BTNTEXT },
-					{ "ButtonBackground", COLOR_BTNFACE },
-					{ "ButtonForegroundPointerOver", COLOR_HIGHLIGHTTEXT },
-					{ "ButtonBackgroundPointerOver", COLOR_HIGHLIGHT },
-					{ "ButtonForegroundPressed", COLOR_WINDOWTEXT },
-					{ "ButtonBackgroundPressed", COLOR_WINDOW },
-				};
-
-				if (auto c = std::find_if(color_map, color_map + std::size(color_map),
-					[&brushName](auto& e) { return brushName == e.first; }); c != std::end(color_map)) {
-					colorRef = GetSysColor(c->second);
-				}
-				else {
-					OutputDebugStringA(fmt::format("Need color mapping for color named {}\n", brushName).c_str());
-					static constexpr auto SeafoamGreen = RGB(0x93, 0xe9, 0xbe);
-					colorRef = SeafoamGreen;
-				}
-			}
-			node->SetValue<TProperty>(colorRef);
-		}
-		else if constexpr (std::is_same_v<typename TProperty::type, uint16_t>) {
-			node->SetValue<TProperty>(value.AsUInt16());
-		}
-		else if constexpr (std::is_same_v<typename TProperty::type, int>) {
-			node->SetValue<TProperty>(value.AsInt32());
-		}
-		else if constexpr (std::is_same_v<typename TProperty::type, float>) {
-			node->SetValue<TProperty>(value.AsSingle());
-		}
-		else if constexpr (std::is_same_v<typename TProperty::type, bool>) {
-			node->SetValue<TProperty>(!value.IsNull() && value.AsBoolean());
-		}
-		else if constexpr (std::is_same_v<typename TProperty::type, std::wstring_view>) {
-			auto hstr = winrt::to_hstring(value.AsString());
-			node->SetValue<TProperty>(hstr.c_str());
-		}
-		else if constexpr (std::is_same_v<typename TProperty::type, Size>) {
-			Size v;
-			const auto& vArray = value.AsArray();
-			for (auto i = 0; i < 2; i++) {
-				v[i] = vArray.at(i).AsUInt16();
-			}
-			node->SetValue<TProperty>(v);
-		}
-		else if constexpr (std::is_same_v<typename TProperty::type, TextAlign>) {
-			const auto vstr = value.AsString();
-			TextAlign ta{};
-			if (vstr == "center") {
-				ta = TextAlign::Center;
-			}
-			else if (vstr == "left") {
-				ta = TextAlign::Left;
-			}
-			else if (vstr == "right") {
-				ta = TextAlign::Right;
-			}
-			else if (vstr == "baseline") {
-				ta = TextAlign::Baseline;
-			}
-			node->SetValue<TProperty>(ta);
-		}
-		else {
-			static_assert(sizeof(TProperty) == 0, "can't convert jsvalue type to property type");
-		}
-	}
-
-
-	using setter_t = void(*)(ShadowNode*, const winrt::Microsoft::ReactNative::JSValue&);
-	struct setter_entry_t {
-		const char* const propertyName;
-		setter_t setter;
-		bool dirtyLayout;
-	};
-
-	static const setter_entry_t* GetProperty(const std::string& sv) {
-		auto& s = TProperties::setters;
-		if (auto found = std::find_if(s, s + std::size(s),
-			[sv](const auto& e) { return e.propertyName == sv; }); found != std::end(s)) {
-			return found;
-		}
-
-		return nullptr;
-	}
-};
-
-struct ViewProperties : ViewManagerProperties<ViewProperties> {
-	constexpr static setter_entry_t setters[] = {
-		{ "backgroundColor", Set<ShadowNode::BackgroundProperty> },
-		{ "color", Set<ShadowNode::ForegroundProperty> },
-		{ "borderRadius", Set<ShadowNode::BorderRadiusProperty> },
-		{ "borderColor", Set<ShadowNode::BorderColorProperty> },
-		{ "borderWidth", Set<ShadowNode::BorderWidthProperty> },
-		{ "onMouseEnter", Set<ShadowNode::OnMouseEnterProperty> },
-		{ "onMouseLeave", Set<ShadowNode::OnMouseLeaveProperty> },
-		//{ "onPress", Set<ShadowNode::OnPressProperty> },
-		{ "onClick", Set<ShadowNode::OnPressProperty> },
-		{ "text", Set<ShadowNode::TextProperty>, true },
-	};
-};
 
 void ViewViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) {
 	for (const auto& v : props) {
@@ -364,67 +238,6 @@ winrt::Microsoft::ReactNative::JSValueObject ViewViewManager::GetConstants() {
 	return view;
 }
 
-JSValueObject RawTextViewManager::GetConstants() {
-	JSValueObject view{
-	{
-		{ "Constants", JSValueObject{} },
-		{ "Commands", JSValueObject{} },
-		{ "NativeProps", JSValueObject{
-			{ "onLayout", "function" },
-			{ "pointerEvents", "string" },
-			{ "onClick", "function" },
-			{ "onMouseEnter", "function" },
-			{ "onMouseLeave", "function" },
-			{ "onPress", "function" },
-			{ "focusable", "boolean" },
-			{ "enableFocusRing", "boolean" },
-			{ "tabIndex", "number" },
-			{ "text", "string" },
-		} },
-		{ "bubblingEventTypes", JSValueObject{} },
-		{ "directEventTypes", JSValueObject{
-			{ "topMouseEnter", JSValueObject {
-				{ "registrationName", "onMouseEnter" },
-			}},
-			{ "topMouseLeave", JSValueObject {
-				{ "registrationName", "onMouseLeave" },
-			}},
-		} },
-	}
-	};
-
-	return view;
-}
-
-std::shared_ptr<ShadowNode> RawTextViewManager::Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props) {
-	return std::make_shared<RawTextShadowNode>(nullptr, m_yogaConfig, this);
-}
-
-void RawTextViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) {
-	for (const auto& v : props) {
-		const auto& propName = v.first;
-		const auto& value = v.second;
-
-		if (auto setter = ViewProperties::GetProperty(propName)) {
-			setter->setter(node.get(), value);
-			if (setter->dirtyLayout) {
-				GetUIManager()->DirtyYogaNode(reactTag);
-			}
-		}
-		else {
-
-		}
-	}
-}
-
-void RawTextViewManager::UpdateLayout(ShadowNode* node, int left, int top, int width, int height) {
-	auto rawNode = static_cast<RawTextShadowNode*>(node);
-	rawNode->m_rc = { left, top, left + width, top + height };
-}
-
-YGMeasureFunc RawTextViewManager::GetCustomMeasureFunction() {
-	return DefaultYogaSelfMeasureFunc;
-}
 
 LRESULT ShadowNode::OnPaint(HDC dc) {
 	PAINTSTRUCT ps{};
@@ -611,84 +424,36 @@ winrt::Microsoft::ReactNative::JSValueObject ButtonViewManager::GetConstants()  
 }
 
 
-YGMeasureFunc TextViewManager::GetCustomMeasureFunction() {
-	return DefaultYogaSelfMeasureFunc;
-}
-
-std::shared_ptr<ShadowNode> TextViewManager::Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props) {
-	return ViewViewManager::Create(reactTag, rootTag, rootHWnd, props);
-	//return std::make_shared<TextShadowNode>(nullptr, m_yogaConfig, this);
-}
-
-struct TextProperties : ViewManagerProperties<TextProperties> {
-	constexpr static setter_entry_t setters[] = {
-		{ "fontSize", Set<ShadowNode::FontSizeProperty>, true },
-		{ "textAlign", Set<ShadowNode::TextAlignProperty>, true },
-	};
-};
-
-void TextViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) {
-	for (const auto& v : props) {
-		const auto& propName = v.first;
-		const auto& value = v.second;
-
-		if (auto setter = TextProperties::GetProperty(propName)) {
-			setter->setter(node.get(), value);
-			if (setter->dirtyLayout) {
-				std::static_pointer_cast<TextShadowNode>(node)->ResetFont();
-				GetUIManager()->DirtyYogaNode(reactTag);
-			}
-		}
-		else {
-			ViewViewManager::UpdateProperties(reactTag, node, props);
-		}
-	}
-}
-
-void TextShadowNode::ResetFont() {
-	auto fontSize = GetValueOrParent<ShadowNode::FontSizeProperty>();
-	if (m_hFont) {
-		DeleteObject(m_hFont);
-		m_hFont = nullptr;
-	}
-	LOGFONT lf{};
-	auto scale = GetDpiForWindow(window) / 96.0f;
-	lf.lfHeight = static_cast<LONG>((fontSize.has_value() ? -fontSize.value() : -12) * scale);
-
-	lf.lfWeight = FW_NORMAL;
-	lf.lfCharSet = DEFAULT_CHARSET;
-	lf.lfOutPrecision = OUT_DEFAULT_PRECIS;
-	lf.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-	lf.lfQuality = PROOF_QUALITY;
-	lf.lfPitchAndFamily = VARIABLE_PITCH | FF_DONTCARE;
-	auto fontFamily = GetValue<ShadowNode::FontFamilyProperty>();
-	StringCchCopy(lf.lfFaceName, std::size(lf.lfFaceName), fontFamily.has_value() ? fontFamily->c_str() : L"Segoe UI");
-
-	m_hFont = CreateFontIndirectW(&lf);
-}
-
-//winrt::Microsoft::ReactNative::JSValueObject GetConstants() {}
-void TextViewManager::UpdateLayout(ShadowNode* node, int left, int top, int width, int height) {
-	ViewViewManager::UpdateLayout(node, left, top, width, height);
-}
 
 std::shared_ptr<PaperUIManager> IWin32ViewManager::GetUIManager() const {
 	return PaperUIManager::GetFromContext(m_context.Handle());
 }
 
-YGSize TextShadowNode::Measure(float width,
+#ifdef _DEBUG
+
+
+
+void ShadowNode::PrintNode(int level) const {
+	cdbg << "VM=" << (m_vm ? typeid(*m_vm).name() : "ROOT") << "\n";
+	auto indent = std::string(level * 2, ' ');
+	for (auto i = 0; i < m_properties.size(); i++) {
+		std::string strValue = PrintValue(i);
+		if (!strValue.empty()) {
+			cdbg << indent << "    \t" << magic_enum::enum_name(static_cast<typename ShadowNode::property_index_t>(i)) << " = " << strValue << "\n";
+		}
+	}
+	for (const auto& v : m_strings) {
+		cdbg << indent << "    \t" << magic_enum::enum_name(v.first) << " = " << winrt::to_string(v.second) << "\n";
+	}
+}
+#endif
+
+YGSize DefaultYogaSelfMeasureFunc(
+	YGNodeRef node,
+	float width,
 	YGMeasureMode widthMode,
 	float height,
 	YGMeasureMode heightMode) {
-	auto str = m_children[0].lock()->GetValue<ShadowNode::TextProperty>();
-	if (str.has_value()) {
-		auto len = static_cast<int>(str->length());
-		SIZE sz{};
-		auto hdc = GetDC(window);
-
-		GetTextExtentPoint32(hdc, str.value().c_str(), len, &sz);
-		float scale = GetDpiForWindow(window) / 96.0f;
-		return { static_cast<float>(sz.cx) * scale , static_cast<float>(sz.cy) * scale };
-	}
-	return { 42,42 };
+	auto shadowNode = reinterpret_cast<ShadowNode*>(YGNodeGetContext(node));
+	return shadowNode->Measure(width, widthMode, height, heightMode);
 }

@@ -1,5 +1,9 @@
 #pragma once
 #include <unordered_map>
+#ifdef _DEBUG
+#include "magic_enum.h"
+#endif
+
 using Thickness = unsigned short;
 using Size = std::array<Thickness, 2>;
 enum class TextAlign {
@@ -26,7 +30,9 @@ private:
         Size size;
         TextAlign textAlign;
     };
+protected:
     static constexpr auto properties_count = static_cast<int>(TPropertyEnum::Last);
+    using property_index_t = TPropertyEnum;
     std::array<PropertyTypes, properties_count> m_properties{};
     std::array<uint8_t, (properties_count + 1) / 2> m_types{};
     static_assert(sizeof(PropertyTypes) <= 4, "Property type got too big, consider using sparse storage instead");
@@ -46,6 +52,23 @@ private:
 
     template<typename T>
     static constexpr uint8_t type_index_v = type_index<T>::value;
+#ifdef _DEBUG
+    std::string PrintValue(size_t index) const {
+        auto value = m_properties[index];
+        auto type_idx = get_type_index(index);
+        switch (type_idx) {
+        case type_index_v<std::monostate>: return {};
+        case type_index_v<COLORREF>: return fmt::format("RGB({},{},{})", GetRValue(value.colorRef), GetGValue(value.colorRef), GetBValue(value.colorRef));
+        case type_index_v<float>: return std::to_string(value.f);
+        case type_index_v<int>: return std::to_string(value.i);
+        case type_index_v<uint16_t>: return std::to_string(value.u16);
+        case type_index_v<bool>: return value.b ? "true" : "false";
+        case type_index_v<Size>: return fmt::format("{} x {}", value.size[0], value.size[1]);
+        case type_index_v<TextAlign>: return std::string{ magic_enum::enum_name(value.textAlign) };
+        }
+        return {};
+    }
+#endif
 
 public:
     template<typename T>
@@ -90,13 +113,13 @@ public:
         m_types[index / 2] = v;
     }
 
-    uint8_t get_type_index(size_t index) {
+    uint8_t get_type_index(size_t index) const {
         auto v = m_types[index / 2];
         return (index % 2 == 0) ? (v & 0xf) : (v >> 4);
     }
 
     template<typename T>
-    std::optional<T> get(size_t index) {
+    std::optional<T> get(size_t index) const {
         auto v = m_properties[index];
         constexpr auto type_idx = type_index_v<T>;
         if (get_type_index(index) == type_idx) {
@@ -129,6 +152,7 @@ enum class PropertyIndex {
     OnMouseEnter,
     OnMouseLeave,
     OnPress,
+    IsMouseOver,
 
     FontSize,
     TextAlign,

@@ -175,6 +175,21 @@ struct PaperUIManager final : std::enable_shared_from_this<PaperUIManager> {
 
     void DirtyYogaNode(int64_t tag);
 
+#ifdef _DEBUG
+    void print_recurse(int64_t tag, const ShadowNode& node, int level) const {
+        cdbg << std::string(level * 2, '>') << "    " << tag << "\t";
+        node.PrintNode(level);
+        for (auto const& n_w : node.m_children) {
+            if (auto n = n_w.lock()) {
+                print_recurse(IWin32ViewManager::GetTag(n->window), *n, level + 1);
+            }
+        }
+    }
+    void PrintNodes() const {
+        const auto node = m_nodes.at(m_rootTag);
+        print_recurse(m_rootTag, *node, 0);
+    }
+#endif
 private:
     winrt::Microsoft::ReactNative::ReactContext m_context;
 

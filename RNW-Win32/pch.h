@@ -40,4 +40,25 @@
 #include <../../.fmt/fmt-7.1.3/include/fmt/format.h>
 
 
+struct cdbg_t {};
+inline const cdbg_t& operator<<(const cdbg_t& c, const std::string_view& v) {
+    OutputDebugStringA(v.data());
+    return c;
+}
+
+template<typename T>
+const cdbg_t& operator<<(const cdbg_t& c, const T& v) {
+    auto t = std::to_string(v);
+    return c << t.c_str();
+}
+inline const cdbg_t& operator<<(const cdbg_t& c, const std::string& v) {
+    OutputDebugStringA(v.data());
+    return c;
+}
+inline const cdbg_t& operator<<(const cdbg_t& c, const char* v) {
+    OutputDebugStringA(v);
+    return c;
+}
+inline constexpr cdbg_t cdbg{};
+
 

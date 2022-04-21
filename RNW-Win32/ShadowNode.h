@@ -11,7 +11,9 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringProperty
             YGNodeFree(node);
         }
     };
-
+#ifdef _DEBUG
+    void PrintNode(int level) const;
+#endif
     using YogaNodePtr = std::unique_ptr<YGNode, YogaNodeDeleter>;
 
     inline static YogaNodePtr make_yoga_node(YGConfigRef config) {
@@ -39,8 +41,7 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringProperty
     std::weak_ptr<ShadowNode> m_parent;
     std::vector<std::weak_ptr<ShadowNode>> m_children;
     IWin32ViewManager* m_vm{nullptr};
-    bool m_isMouseOver{ false };
-
+    
     virtual LRESULT OnPaint(HDC dc = nullptr);
     bool ImplementsPadding() const noexcept { return false; }
 
@@ -54,11 +55,13 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringProperty
     using OnMouseEnterProperty = Property<bool, PropertyIndex::OnMouseEnter>;
     using OnMouseLeaveProperty = Property<bool, PropertyIndex::OnMouseLeave>;
     using OnPressProperty = Property<bool, PropertyIndex::OnPress>;
+    using IsMouseOverProperty = Property<bool, PropertyIndex::IsMouseOver>;
 
     using TextProperty = StringProperty<StringPropertyIndex::Text>;
     using TextAlignProperty = Property<TextAlign, PropertyIndex::TextAlign>;
     using FontSizeProperty = Property<float, PropertyIndex::FontSize>;
     using FontFamilyProperty = StringProperty<StringPropertyIndex::FontFamily>;
+
 
     template<typename TProperty>
     auto GetValue() {
