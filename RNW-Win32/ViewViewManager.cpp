@@ -80,9 +80,10 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
 
 	switch (msg) {
 	case WM_NCHITTEST: {
-		if (!node->WantsMouseMove()) {
+		if (!node->GetValueOrDefault<ShadowNode::IsMouseOverProperty>() && (!node->WantsMouseMove() || !node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>())) {
 			return HTTRANSPARENT;
 		}
+		return HTCLIENT;
 		break;
 	}
 	case WM_LBUTTONDOWN: {
@@ -94,13 +95,14 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
 	case WM_MOUSEMOVE: {
 		//vm->GetUIManager()->PrintNodes();
 		
-		OutputDebugStringA(fmt::format("MouseMove tag={} vmKind={}\n", tag, typeid(*node->m_vm).name()).c_str());
 		if (!node->WantsMouseMove()) {
 			__noop;
 		}
 		else {
-			if (!node->GetValue<ShadowNode::IsMouseOverProperty>() && node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>()) {
+			if (!node->GetValueOrDefault<ShadowNode::IsMouseOverProperty>() && node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>()) {
 				node->SetValue<ShadowNode::IsMouseOverProperty>(true);
+				OutputDebugStringA(fmt::format("MouseMove tag={} vmKind={}\n", tag, typeid(*node->m_vm).name()).c_str());
+
 				TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd };
 				TrackMouseEvent(&tme);
 
