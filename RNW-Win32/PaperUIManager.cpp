@@ -101,24 +101,24 @@ void PaperUIManager::onBatchCompleted() noexcept {
 
 void PaperUIManager::DirtyYogaNode(int64_t tag) {
 	OutputDebugStringA(fmt::format("Dirty {}\n", tag).c_str());
-    auto& pShadowNodeChild = m_nodes[tag];
-    if (pShadowNodeChild != nullptr) {
-        auto* pViewManager = pShadowNodeChild->m_vm;
-        if (YGMeasureFunc func = pViewManager->GetCustomMeasureFunction()) {
-            // If there is a yoga node for this tag mark it as dirty
-			YGNodeRef yogaNodeChild = pShadowNodeChild->yogaNode.get();
-            if (yogaNodeChild != nullptr) {
-                // Retrieve and dirty the yoga node
-                YGNodeMarkDirty(yogaNodeChild);
+    auto& pShadowNode = m_nodes[tag];
+	if (pShadowNode != nullptr) {
+		if (auto* pViewManager = pShadowNode->m_vm) {
+			if (YGMeasureFunc func = pViewManager->GetCustomMeasureFunction()) {
+				// If there is a yoga node for this tag mark it as dirty
+				YGNodeRef yogaNode = pShadowNode->yogaNode.get();
+				if (yogaNode != nullptr) {
+					// Retrieve and dirty the yoga node
+					YGNodeMarkDirty(yogaNode);
 
-                // Once we mark a node dirty we can stop because the yoga code will mark
-                // all parents anyway
-                return;
-            }
-        }
-
+					// Once we mark a node dirty we can stop because the yoga code will mark
+					// all parents anyway
+					return;
+				}
+			}
+		}
         // Since this node didn't meet the criteria, jump to parent in case it does
-		auto parent_weak = pShadowNodeChild->m_parent;
+		auto parent_weak = pShadowNode->m_parent;
 		if (auto parent = parent_weak.lock())
 			DirtyYogaNode(IWin32ViewManager::GetTag(parent->window));
     }

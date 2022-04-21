@@ -340,6 +340,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
+    case WM_SIZE: {
+        if (rootview) {
+            rootview->OnLayoutChanged();
+        }
+        break;
+    }
     case WM_COMMAND:
         {
             int wmId = LOWORD(wParam);

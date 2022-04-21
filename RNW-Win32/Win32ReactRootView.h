@@ -16,10 +16,12 @@ struct Win32ReactRootView : std::enable_shared_from_this<Win32ReactRootView> {
     }
 
     winrt::Microsoft::ReactNative::IReactViewHost m_viewHost;
+    void OnLayoutChanged();
 
 private:
     HWND m_wnd{ nullptr };
     std::string m_componentName;
     int64_t m_tag{ -1 };
+    winrt::Microsoft::ReactNative::ReactContext m_context{ nullptr };
 };
 
