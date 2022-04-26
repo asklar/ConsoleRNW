@@ -8,6 +8,7 @@ enum class ViewKind {
     RawText = 1,
     Text = 2,
     CommonControl = 3,
+	Image = 4,
 };
 
 struct ViewViewManager : IWin32ViewManager {
@@ -49,12 +50,19 @@ struct RawTextViewManager : IWin32ViewManager {
 };
 
 struct ButtonViewManager : ViewViewManager {
-    ButtonViewManager(winrt::Microsoft::ReactNative::ReactContext ctx, YGConfigRef ycr) : ViewViewManager(ctx, ViewKind::CommonControl, ycr) {}
-    std::shared_ptr<ShadowNode> Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props);
-    void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
-    winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
+	ButtonViewManager(winrt::Microsoft::ReactNative::ReactContext ctx, YGConfigRef ycr) : ViewViewManager(ctx, ViewKind::CommonControl, ycr) {}
+	std::shared_ptr<ShadowNode> Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props);
+	void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
+	winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
+};
 
-    //void UpdateLayout(ShadowNode* node, int left, int top, int width, int height) override;
+struct ImageViewManager : ViewViewManager {
+	ImageViewManager(winrt::Microsoft::ReactNative::ReactContext ctx, YGConfigRef ycr) : ViewViewManager(ctx, ViewKind::Image, ycr) {}
+	//std::shared_ptr<ShadowNode> Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props);
+	void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
+	winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
+	//void UpdateLayout(ShadowNode* node, int left, int top, int width, int height) override;
+	YGMeasureFunc GetCustomMeasureFunction() override;
 };
 
 template<typename TProperties>

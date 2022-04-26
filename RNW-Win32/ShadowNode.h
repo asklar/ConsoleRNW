@@ -107,6 +107,15 @@ protected:
     virtual void PaintForeground(HDC dc);
 };
 
+struct ImageShadowNode : ShadowNode {
+    ImageShadowNode(HWND w, YGConfigRef config, IWin32ViewManager* vm) : ShadowNode(w, config, vm) {}
+    void PaintForeground(HDC dc) override;
+    YGSize Measure(float width,
+        YGMeasureMode widthMode,
+        float height,
+        YGMeasureMode heightMode) override;
+};
+
 struct TextShadowNode : ShadowNode {
     TextShadowNode(HWND w, YGConfigRef config, IWin32ViewManager* vm) : ShadowNode(w, config, vm) {}
     void PaintForeground(HDC dc) override;

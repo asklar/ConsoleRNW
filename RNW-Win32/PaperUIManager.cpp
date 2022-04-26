@@ -53,6 +53,7 @@ void PaperUIManager::EnsureViewManager(const std::string& viewManagerName) {
 			{ "RCTText", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef yogaConfig) { return std::unique_ptr<IWin32ViewManager>(new TextViewManager(context, yogaConfig)); }},
 			{ "Text", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef yogaConfig) { return std::unique_ptr<IWin32ViewManager>(new TextViewManager(context, yogaConfig)); }},
 			{ "RCTButton", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ButtonViewManager(context, ycr)); }},
+			{ "RCTImageView", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ImageViewManager(context, ycr)); }},
 		};
 		const auto& entry = std::find_if(std::begin(viewMgrFactory), std::end(viewMgrFactory), [&viewManagerName](const auto& i) { return i.name == viewManagerName; });
 		m_viewManagers[viewManagerName] = entry->make(m_context, m_yogaConfig);
@@ -314,7 +315,7 @@ void PaperUIManager::measure(
 	Mso::Functor<void(double left, double top, double width, double height, double pageX, double pageY)> const& callback) noexcept
 {
 	RECT rect{};
-	GetWindowRect(m_nodes[reactTag]->window, &rect);
+	GetWindowRect(m_nodes[static_cast<int64_t>(reactTag)]->window, &rect);
 	callback(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, rect.left, rect.top);
 	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [context = m_context, reactTag = static_cast<int64_t>(reactTag), callback = std::move(callback)]() mutable
 	//{
@@ -330,7 +331,7 @@ void PaperUIManager::measureInWindow(
 	Mso::Functor<void(double x, double y, double width, double height)> const& callback) noexcept
 {
 	RECT rect{};
-	GetWindowRect(m_nodes[reactTag]->window, &rect);
+	GetWindowRect(m_nodes[static_cast<int64_t>(reactTag)]->window, &rect);
 	callback(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
  	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(), [context = m_context, uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), callback = std::move(callback)]() mutable
 	//{

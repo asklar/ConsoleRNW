@@ -8,11 +8,19 @@
 
 import React from 'react';
 
-import {Text, Button, View} from 'react-native';
+import {Text, Image, Button, View} from 'react-native';
 const App = () => {
+    const [color, setColor] = React.useState('red');
     return (
-        <Button title="Click me!" 
-        onPress={() => { alert('clicked!'); }} />);
+        /*<>
+        <View style={{
+            width: 200, height: 50,
+            backgroundColor: color,
+            borderRadius: 50,
+        }} onMouseEnter={() => { setColor('green'); }} />
+        */<Image source="react.png" />
+        //</>
+    );
 };
 
 export default App;

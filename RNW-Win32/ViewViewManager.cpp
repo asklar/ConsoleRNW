@@ -13,6 +13,8 @@ const wchar_t* ViewViewManager::GetWindowClassName() const {
 		return L"RCTRawText";
 	case ViewKind::Text:
 		return L"RCTText";
+	case ViewKind::Image:
+		return L"RCTImage";
 	default:
 		return nullptr;
 	}
@@ -173,6 +175,9 @@ std::shared_ptr<ShadowNode> ViewViewManager::Create(int64_t reactTag, int64_t ro
 	case ViewKind::Text:
 		return std::make_shared<TextShadowNode>(hwnd, m_yogaConfig, this);
 		break;
+	case ViewKind::Image:
+		return std::make_shared <ImageShadowNode>(hwnd, m_yogaConfig, this);
+		break;
 	default:
 		throw std::invalid_argument("View Manager kind");
 		break;
@@ -249,6 +254,7 @@ LRESULT ShadowNode::OnPaint(HDC dc) {
 	auto dbg_tag = IWin32ViewManager::GetTag(window);
 	PaintBackground(dc);
 	PaintForeground(dc);
+
 	EndPaint(window, &ps);
 	return 0;
 }
@@ -259,16 +265,20 @@ void ShadowNode::PaintBackground(HDC dc) {
 	RECT rc{};
 	GetClientRect(hwnd, &rc);
 
+	Gdiplus::Graphics graphics(dc);
+	graphics.SetSmoothingMode(Gdiplus::SmoothingMode::SmoothingModeAntiAlias);
 
 	auto bkColor = GetValue<ShadowNode::BackgroundProperty>();
 
 	auto borderRadius = GetValueOrDefault<ShadowNode::BorderRadiusProperty>();
+
 	auto rgn = CreateRoundRectRgn(rc.left, rc.top, rc.right, rc.bottom, borderRadius, borderRadius);
+	auto region = Gdiplus::Region(rgn);
 
 	if (bkColor.has_value()) {
-		auto old = SetDCBrushColor(dc, bkColor.value());
-		FillRgn(dc, rgn, (HBRUSH)GetStockObject(DC_BRUSH));
-		SetDCBrushColor(dc, old);
+		auto argb = Gdiplus::Color(GetRValue(bkColor.value()), GetGValue(bkColor.value()), GetBValue(bkColor.value()));
+		Gdiplus::SolidBrush backBrush(argb);
+		graphics.FillRegion(&backBrush, &region);
 	}
 
 	auto borderColor = GetValue<ShadowNode::BorderColorProperty>();
@@ -459,3 +469,91 @@ YGSize DefaultYogaSelfMeasureFunc(
 	auto shadowNode = reinterpret_cast<ShadowNode*>(YGNodeGetContext(node));
 	return shadowNode->Measure(width, widthMode, height, heightMode);
 }
+
+void ImageShadowNode::PaintForeground(HDC dc) {
+	Gdiplus::Graphics g(dc);
+	Gdiplus::Bitmap b(L"C:/users/asklar/source/repos/ConsoleRNW/example/react.png");
+	auto w = YGNodeLayoutGetWidth(yogaNode.get());
+	auto h = YGNodeLayoutGetHeight(yogaNode.get());
+	g.DrawImage(&b, 0.f, 0.f, w, h);
+}
+
+YGSize ImageShadowNode::Measure(float width,
+	YGMeasureMode widthMode,
+	float height,
+	YGMeasureMode heightMode) {
+	return { 200, 200 };
+}
+
+YGMeasureFunc ImageViewManager::GetCustomMeasureFunction() {
+	return DefaultYogaSelfMeasureFunc;
+}
+
+void ImageViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) {
+	auto sn = std::static_pointer_cast<ImageShadowNode>(node);
+	for (const auto& v : props) {
+		const auto& propName = v.first;
+		const auto& value = v.second;
+
+		if (propName == "source") {
+
+		}
+		else {
+			if (auto setter = ViewProperties::GetProperty(propName)) {
+				setter->setter(node.get(), value);
+				if (setter->dirtyLayout) {
+					GetUIManager()->DirtyYogaNode(reactTag);
+				}
+			}
+		}
+	}
+}
+
+winrt::Microsoft::ReactNative::JSValueObject ImageViewManager::GetConstants() {
+	return JSValueObject{
+	{
+		{ "Constants", JSValueObject{} },
+		{ "Commands", JSValueObject{} },
+		{ "NativeProps", JSValueObject{
+			//{ "onLayout", "function" },
+			//{ "pointerEvents", "string" },
+			//{ "onClick", "function" },
+			//{ "onMouseEnter", "function" },
+			//{ "onMouseLeave", "function" },
+			//{ "onPress", "function" },
+			//{ "focusable", "boolean" },
+			//{ "enableFocusRing", "boolean" },
+			//{ "tabIndex", "number" },
+			{ "source", "Map" },
+		} },
+		{ "bubblingEventTypes", JSValueObject{} },
+		{ "directEventTypes", JSValueObject{
+			{ "topMouseEnter", JSValueObject {
+				{ "registrationName", "onMouseEnter" },
+			}},
+			{ "topMouseLeave", JSValueObject {
+				{ "registrationName", "onMouseLeave" },
+			}},
+			{ "topClick", JSValueObject {
+				{ "registrationName", "onClick" },
+			}},
+			{ "topLoadStart", JSValueObject {
+				{ "registrationName", "onLoadStart" }
+			}},
+			{ "topLoadEnd", JSValueObject {
+				{ "registrationName", "onLoadEnd" }
+			}},
+			{ "topLoad", JSValueObject {
+				{ "registrationName", "onLoad" }
+			}},
+			{ "topError", JSValueObject {
+				{ "registrationName", "onError" }
+			}},
+	}
+}
+
+} 
+	};
+
+}
+

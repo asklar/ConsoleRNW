@@ -62,3 +62,4 @@ inline const cdbg_t& operator<<(const cdbg_t& c, const char* v) {
 inline constexpr cdbg_t cdbg{};
 
 
+#include <gdiplus.h>

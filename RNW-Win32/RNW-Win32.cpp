@@ -14,9 +14,12 @@
 #include "PaperUIManager.h"
 #include <filesystem>
 
+
 //#pragma comment(linker,"\"/manifestdependency:type='win32' \
 // name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
 // processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+
+#pragma comment(lib, "gdiplus.lib")
 
 using namespace winrt;
 using namespace Microsoft::ReactNative;
@@ -97,7 +100,7 @@ struct Win32ReactViewInstance : winrt::implements<Win32ReactViewInstance, Micros
         m_context = context;
     }
 
-    void UpdateRootView() {
+    void UpdateRootView(winrt::Microsoft::ReactNative::ReactInstanceState) {
 
     }
 
@@ -213,7 +216,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
-    // TODO: Place code here.
+    Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+    ULONG_PTR           gdiplusToken;
+
+    // Initialize GDI+.
+    Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, nullptr);
 
     // Initialize global strings
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -267,6 +274,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
     }
     KillTimer(hwnd, 1);
+
+    Gdiplus::GdiplusShutdown(gdiplusToken);
     return (int) msg.wParam;
 }
 
