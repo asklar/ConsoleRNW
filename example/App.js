@@ -18,7 +18,7 @@ const App = () => {
         <>
             <Text style={{ fontFamily: "Segoe UI", fontSize: 14, marginLeft: 24, marginBottom: 12 }}>Hello world!</Text>
             <Image source={{ uri: "react.png" }} style={{width: 200, height: 160}}/>
-            <NativeButton title="hello" style={{width: 150, height: 50}} onClick={() => {alert('clicked'); }}/>
+            <NativeButton title="hello" style={{width: 150, height: 50}} onClick={() => {console.log('clicked'); alert('clicked'); }}/>
         </>
     );
 };

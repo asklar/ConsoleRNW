@@ -17,6 +17,7 @@ struct ViewViewManager : IWin32ViewManager {
 
     static LRESULT __stdcall ViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+
     ~ViewViewManager();
 
     std::shared_ptr<ShadowNode> Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props);
@@ -26,9 +27,17 @@ struct ViewViewManager : IWin32ViewManager {
     winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
 
     void UpdateLayout(ShadowNode* node, int left, int top, int width, int height) override;
+
+	static LRESULT OnHitTest(ShadowNode* node);
+	static void OnEraseBackground(const HWND& hwnd, ShadowNode* node);
+	static void RaiseMouseLeave(ShadowNode* node, int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
+	static void RaiseMouseEnter(ShadowNode* node, int64_t& tag, const HWND& hwnd, const WPARAM& wParam, const LPARAM& lParam);
+	static void RaiseOnClick(ShadowNode* node, const int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
 private:
     ViewKind m_kind;
     const wchar_t* GetWindowClassName() const;
+
+
 };
 
 struct TextViewManager : ViewViewManager {

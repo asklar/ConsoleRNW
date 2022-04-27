@@ -82,43 +82,25 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
 
 	switch (msg) {
 	case WM_NCHITTEST: {
-		if (!node->GetValueOrDefault<ShadowNode::IsMouseOverProperty>() && (!node->WantsMouseMove() || !node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>())) {
-			return HTTRANSPARENT;
-		}
-		return HTCLIENT;
+		return OnHitTest(node);
 		break;
 	}
 	case WM_LBUTTONDOWN: {
-		if (node->GetValueOrParent<ShadowNode::OnPressProperty>()) {
-			node->m_vm->EmitEvent("topClick", tag, MouseEventArgs(tag, wParam, lParam));
-		}
+		RaiseOnClick(node, tag, wParam, lParam);
 		return 0;
 	}
 	case WM_MOUSEMOVE: {
-		//vm->GetUIManager()->PrintNodes();
-		
 		if (!node->WantsMouseMove()) {
 			__noop;
 		}
 		else {
-			if (!node->GetValueOrDefault<ShadowNode::IsMouseOverProperty>() && node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>()) {
-				node->SetValue<ShadowNode::IsMouseOverProperty>(true);
-				OutputDebugStringA(fmt::format("MouseMove tag={} vmKind={}\n", tag, typeid(*node->m_vm).name()).c_str());
-
-				TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd };
-				TrackMouseEvent(&tme);
-
-				node->m_vm->EmitEvent("topMouseEnter", tag, MouseEventArgs(tag, wParam, lParam));
-
-			}
+			RaiseMouseEnter(node, tag, hwnd, wParam, lParam);
 			return 0;
 		}
 		break;
 	}
 	case WM_MOUSELEAVE: {
-		node->SetValue<ShadowNode::IsMouseOverProperty>(false);
-		OutputDebugStringA(fmt::format("MouseLeave tag={} vmKind={}\n", tag, typeid(*node->m_vm).name()).c_str());
-		node->m_vm->EmitEvent("topMouseLeave", tag, MouseEventArgs(tag, wParam, lParam));
+		RaiseMouseLeave(node, tag, wParam, lParam);
 		break;
 	}
 	case WM_PAINT: {
@@ -126,30 +108,71 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
 		break;
 	}
 	case WM_ERASEBKGND:
-		PAINTSTRUCT ps{};
-		auto dc = BeginPaint(hwnd, &ps);
-		RECT rc{};
-		GetClientRect(hwnd, &rc);
-
-		if (auto parent = node->GetParent().lock()) {
-			auto bkColor = parent->GetValue<ShadowNode::BackgroundProperty>();
-			if (bkColor.has_value()) {
-				auto oldDCBrushColor = SetDCBrushColor(dc, bkColor.value());
-				FillRect(dc, &rc, (HBRUSH)GetStockObject(DC_BRUSH));
-				SetDCBrushColor(dc, oldDCBrushColor);
-			}
-			else {
-				FillRect(dc, &rc, (HBRUSH)(COLOR_WINDOW + 1));
-			}
-		}
-		else {
-			// the parent is gone...
-		}
-		EndPaint(hwnd, &ps);
+		OnEraseBackground(hwnd, node);
 		return 0;
 	}
 	//return DefSubclassProc(hwnd, msg, wParam, lParam);
 	return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+LRESULT ViewViewManager::OnHitTest(ShadowNode* node)
+{
+	if (!node->GetValueOrDefault<ShadowNode::IsMouseOverProperty>() && (!node->WantsMouseMove() || !node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>())) {
+		return HTTRANSPARENT;
+	}
+	return HTCLIENT;
+}
+
+void ViewViewManager::OnEraseBackground(const HWND& hwnd, ShadowNode* node)
+{
+	PAINTSTRUCT ps{};
+	auto dc = BeginPaint(hwnd, &ps);
+	RECT rc{};
+	GetClientRect(hwnd, &rc);
+
+	if (auto parent = node->GetParent().lock()) {
+		auto bkColor = parent->GetValue<ShadowNode::BackgroundProperty>();
+		if (bkColor.has_value()) {
+			auto oldDCBrushColor = SetDCBrushColor(dc, bkColor.value());
+			FillRect(dc, &rc, (HBRUSH)GetStockObject(DC_BRUSH));
+			SetDCBrushColor(dc, oldDCBrushColor);
+		}
+		else {
+			FillRect(dc, &rc, (HBRUSH)(COLOR_WINDOW + 1));
+		}
+	}
+	else {
+		// the parent is gone...
+	}
+	EndPaint(hwnd, &ps);
+}
+
+void ViewViewManager::RaiseMouseLeave(ShadowNode* node, int64_t& tag, const WPARAM& wParam, const LPARAM& lParam)
+{
+	node->SetValue<ShadowNode::IsMouseOverProperty>(false);
+	OutputDebugStringA(fmt::format("MouseLeave tag={} vmKind={}\n", tag, typeid(*node->m_vm).name()).c_str());
+	node->m_vm->EmitEvent("topMouseLeave", tag, MouseEventArgs(tag, wParam, lParam));
+}
+
+void ViewViewManager::RaiseMouseEnter(ShadowNode* node, int64_t& tag, const HWND& hwnd, const WPARAM& wParam, const LPARAM& lParam)
+{
+	if (!node->GetValueOrDefault<ShadowNode::IsMouseOverProperty>() && node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>()) {
+		node->SetValue<ShadowNode::IsMouseOverProperty>(true);
+		OutputDebugStringA(fmt::format("MouseMove tag={} vmKind={}\n", tag, typeid(*node->m_vm).name()).c_str());
+
+		TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd };
+		TrackMouseEvent(&tme);
+
+		node->m_vm->EmitEvent("topMouseEnter", tag, MouseEventArgs(tag, wParam, lParam));
+
+	}
+}
+
+void ViewViewManager::RaiseOnClick(ShadowNode* node, const int64_t& tag, const WPARAM& wParam, const LPARAM& lParam)
+{
+	if (node->GetValueOrParent<ShadowNode::OnPressProperty>()) {
+		node->m_vm->EmitEvent("topClick", tag, MouseEventArgs(tag, wParam, lParam));
+	}
 }
 
 ViewViewManager::~ViewViewManager() {
@@ -376,15 +399,25 @@ void RawTextShadowNode::PaintForeground(HDC dc) {
 }
 
 LRESULT ButtonViewManager::WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubClass, DWORD_PTR dwRefData) {
-	return ViewViewManager::ViewWndProc(hwnd, uMsg, wParam, lParam);
+	auto node = GetShadowNode(hwnd);
+	auto tag = IWin32ViewManager::GetTag(hwnd);
+	auto vm = node ? node->m_vm : nullptr;
+
+	switch (uMsg) {
+		//ViewViewManager::ViewWndProc(hwnd, uMsg, wParam, lParam);
+	case WM_LBUTTONUP:
+		ViewViewManager::RaiseOnClick(node, tag, wParam, lParam);
+		break;
+	}
+	return DefSubclassProc(hwnd, uMsg, wParam, lParam);
 }
 
 std::shared_ptr<ShadowNode> ButtonViewManager::Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props) {
 	auto btn = CreateWindowW(L"BUTTON", L"", 
-		WS_CHILD | WS_TABSTOP | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_TEXT, 
+		WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 
 		0, 0, 0, 0, rootHWnd, 
 		nullptr, nullptr, nullptr);
-	//SetWindowSubclass(btn, ButtonViewManager::WndProc, 1, 0);
+	SetWindowSubclass(btn, ButtonViewManager::WndProc, 1, 0);
 	return std::make_shared<ButtonShadowNode>(btn, m_yogaConfig, this);
 }
 
@@ -442,6 +475,9 @@ winrt::Microsoft::ReactNative::JSValueObject ButtonViewManager::GetConstants()  
 				{ "topMouseLeave", JSValueObject {
 					{ "registrationName", "onMouseLeave" },
 				}},
+				{ "topClick", JSValueObject {
+					{ "registrationName", "onClick" }
+				}}
 			} },
 		}
 	};
