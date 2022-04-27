@@ -225,7 +225,7 @@ struct SparseProperty {
 
     template<typename... Types>
     static void Set(SparseStorage<SparsePropertyIndex, Types...>& storage, const TBackingType& value) {
-        storage.m_sparseProperties.emplace(index, value);
+        storage.m_sparseProperties[index] = value;
     }
 
     template<typename... Types>

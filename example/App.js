@@ -19,8 +19,8 @@ const App = () => {
             marginLeft: 24, marginBottom: 12, marginRight: 22, textAlign: 'right'}}>Hello world!</Text>
             <Image source={{ uri: "react.png" }} style={{width: 200, height: 160}}/>
             <View style={{ backgroundColor: 'yellow', flexDirection: 'row' }}>
-                <NativeButton title="this is a long title in a native button"
-                    fontFamily="Segoe UI" fontSize={14}
+                <NativeButton title="Click me" style={{margin: 8}}
+                    fontFamily="Segoe UI" fontSize={10}
                     onClick={() => { console.log('clicked'); alert('clicked'); }} />
             </View>
         </>

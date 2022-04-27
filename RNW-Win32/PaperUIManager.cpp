@@ -254,7 +254,7 @@ void PaperUIManager::updateView(double reactTag, std::string viewName, winrt::Mi
 	auto shadowNode = m_nodes[tag];
     m_viewManagers[viewName]->UpdateProperties(tag, shadowNode, props);
 	StyleYogaNode(*shadowNode, shadowNode->yogaNode.get(), props);
-
+	DoLayout();
 	Invalidate(shadowNode->window);
 	//winrt::Microsoft::ReactNative::ReactCoreInjection::PostToUIBatchingQueue(m_context.Handle(),
 	//	[uimanager = m_uimanager, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), props = std::move(props)]() mutable
