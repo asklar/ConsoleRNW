@@ -358,6 +358,7 @@ std::shared_ptr<ShadowNode> ButtonViewManager::Create(int64_t reactTag, int64_t 
 		WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 
 		0, 0, 0, 0, rootHWnd, 
 		nullptr, nullptr, nullptr);
+	IWin32ViewManager::SetTag(btn, reactTag);
 	SetWindowSubclass(btn, ButtonViewManager::WndProc, 1, 0);
 	return std::make_shared<ButtonShadowNode>(btn, m_yogaConfig, this);
 }

@@ -226,6 +226,9 @@ void PaperUIManager::createView(
 		EnsureViewManager(viewName);
 		const auto& vm = m_viewManagers[viewName];
         auto shadowNode = vm->Create(reactTag, rootTag, TagToHWND(rootTag), props);
+#ifdef _DEBUG
+		assert(!shadowNode->window || IWin32ViewManager::GetTag(shadowNode->window) != 0);
+#endif
 
         auto result = m_nodes.emplace(reactTag, shadowNode);
         if (result.second) {
