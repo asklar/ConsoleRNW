@@ -12,7 +12,7 @@ struct IWin32ViewManager {
     virtual winrt::Microsoft::ReactNative::JSValueObject GetConstants() = 0;
     virtual void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) = 0;
 
-    virtual void UpdateLayout(ShadowNode* node, int left, int top, int width, int height) = 0;
+    virtual void UpdateLayout(ShadowNode* node, float left, float top, float width, float height) = 0;
     static ShadowNode* GetShadowNode(HWND hwnd) {
         return reinterpret_cast<ShadowNode*>(GetPropW(hwnd, L"ShadowNode"));
     }

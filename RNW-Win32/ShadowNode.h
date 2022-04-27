@@ -14,7 +14,7 @@ inline YGSize operator*(const YGSize& a, float f) {
     return { a.width * f, a.height * f};
 }
 
-struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparsePropertyIndex, std::wstring, HFONT> {
+struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparsePropertyIndex, std::wstring> {
     struct YogaNodeDeleter {
         void operator()(YGNodeRef node) {
             YGNodeFree(node);
@@ -70,8 +70,7 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparseProperty
     using TextAlignProperty = Property<TextAlign, PropertyIndex::TextAlign>;
     using FontSizeProperty = Property<float, PropertyIndex::FontSize>;
     using FontFamilyProperty = SparseProperty<SparsePropertyIndex::FontFamily>;
-    using HFontProperty = SparseProperty<SparsePropertyIndex::HFont, HFONT>;
-
+    
     template<typename TProperty>
     auto GetValue() const {
         return TProperty::Get(this);
@@ -93,9 +92,9 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparseProperty
     }
 
     template<typename TProperty>
-    typename TProperty::type GetValueOrParentOrDefault() const {
+    typename TProperty::type GetValueOrParentOrDefault(const typename TProperty::type& def = typename TProperty::type{}) const {
         auto v = GetValueOrParent<TProperty>();
-        return v.has_value() ? v.value() : typename TProperty::type();
+        return v.has_value() ? v.value() : def;
     }
 
     template<typename TProperty>
@@ -118,7 +117,7 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparseProperty
 
     virtual YGSize MeasureText() const;
     LOGFONT GetLogFont() const;
-    virtual void ResetFont();
+    virtual void CreateFont();
 
 protected:
     virtual void PaintBackground(HDC dc);
@@ -153,7 +152,6 @@ struct TextShadowNode : ShadowNode {
 struct RawTextShadowNode : ShadowNode {
     RawTextShadowNode(HWND w, YGConfigRef config, IWin32ViewManager* vm) : ShadowNode(w, config, vm){}
     void PaintForeground(HDC dc) override;
-    RECT m_rc{};
     bool WantsMouseMove() override { return false; }
     std::shared_ptr<TextShadowNode> Parent() const {
         return std::static_pointer_cast<TextShadowNode>(m_parent.lock());
@@ -169,5 +167,5 @@ struct ButtonShadowNode : ShadowNode {
 
         return MeasureText() + YGSize{ 14, 14 } * GetScaleFactor();
     }
-    void ResetFont() override;
+    void CreateFont() override;
 };

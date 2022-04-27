@@ -26,7 +26,7 @@ struct ViewViewManager : IWin32ViewManager {
 
     winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
 
-    void UpdateLayout(ShadowNode* node, int left, int top, int width, int height) override;
+    void UpdateLayout(ShadowNode* node, float left, float top, float width, float height) override;
 
 	static LRESULT OnHitTest(ShadowNode* node);
 	static void OnEraseBackground(const HWND& hwnd, ShadowNode* node);
@@ -46,7 +46,7 @@ struct TextViewManager : ViewViewManager {
     std::shared_ptr<ShadowNode> Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props);
     void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
 //    winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
-    void UpdateLayout(ShadowNode* node, int left, int top, int width, int height) override;
+    void UpdateLayout(ShadowNode* node, float left, float top, float width, float height) override;
 };
 
 struct RawTextViewManager : IWin32ViewManager {
@@ -54,7 +54,7 @@ struct RawTextViewManager : IWin32ViewManager {
     std::shared_ptr<ShadowNode> Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props);
     void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
     winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
-    void UpdateLayout(ShadowNode* node, int left, int top, int width, int height) override;
+    void UpdateLayout(ShadowNode* node, float left, float top, float width, float height) override;
     YGMeasureFunc GetCustomMeasureFunction() override;
 };
 

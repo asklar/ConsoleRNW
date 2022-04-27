@@ -189,10 +189,10 @@ void PaperUIManager::DoLayout() {
       continue;
     YGNodeSetHasNewLayout(yogaNode, false);
 
-    auto left = static_cast<int>(YGNodeLayoutGetLeft(yogaNode));
-	auto top = static_cast<int>(YGNodeLayoutGetTop(yogaNode));
-	auto width = static_cast<int>(YGNodeLayoutGetWidth(yogaNode));
-	auto height = static_cast<int>(YGNodeLayoutGetHeight(yogaNode));
+    auto left = YGNodeLayoutGetLeft(yogaNode);
+	auto top = YGNodeLayoutGetTop(yogaNode);
+	auto width = YGNodeLayoutGetWidth(yogaNode);
+	auto height = YGNodeLayoutGetHeight(yogaNode);
 
 	const auto &shadowNode = m_nodes[tag];
     

@@ -59,9 +59,7 @@ void RawTextViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<Shad
 	}
 }
 
-void RawTextViewManager::UpdateLayout(ShadowNode* node, int left, int top, int width, int height) {
-	auto rawNode = static_cast<RawTextShadowNode*>(node);
-	rawNode->m_rc = { left, top, left + width, top + height };
+void RawTextViewManager::UpdateLayout(ShadowNode* node, float left, float top, float width, float height) {
 }
 
 YGMeasureFunc RawTextViewManager::GetCustomMeasureFunction() {
@@ -99,7 +97,7 @@ void TextViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowN
 	ViewViewManager::UpdateProperties(reactTag, node, props);
 
 	if (dirty) {
-		node->ResetFont();
+		node->CreateFont();
 		GetUIManager()->DirtyYogaNode(reactTag);
 	}
 }
@@ -124,7 +122,7 @@ LOGFONT ShadowNode::GetLogFont() const {
 
 
 //winrt::Microsoft::ReactNative::JSValueObject GetConstants() {}
-void TextViewManager::UpdateLayout(ShadowNode* node, int left, int top, int width, int height) {
+void TextViewManager::UpdateLayout(ShadowNode* node, float left, float top, float width, float height) {
 	ViewViewManager::UpdateLayout(node, left, top, width, height);
 }
 
@@ -160,9 +158,13 @@ YGSize ShadowNode::MeasureText() const {
 
 		Gdiplus::Graphics g(window);
 
-		Gdiplus::Font font(hdc, GetValueOrParentOrDefault<ShadowNode::HFontProperty>());
+		auto fontFamily = GetValueOrParentOrDefault<ShadowNode::FontFamilyProperty>(L"Segoe UI");
+		auto fontSize = GetValueOrParentOrDefault<ShadowNode::FontSizeProperty>(12.f);
+		Gdiplus::Font font(fontFamily.c_str(), fontSize);
 		Gdiplus::RectF boundingBox{};
-		g.MeasureString(str->c_str(), len, &font, { 0.f, 0.f }, &boundingBox);
+		if (g.MeasureString(str->c_str(), len, &font, { 0.f, 0.f }, &boundingBox) != Gdiplus::Status::Ok) {
+			assert(false);
+		}
 
 		float scale = 1.f;
 		return { static_cast<float>(boundingBox.Width) * scale , static_cast<float>(boundingBox.Height) * scale };
@@ -191,31 +193,35 @@ void RawTextShadowNode::PaintForeground(HDC dc) {
 
 	auto bkOld = GetBkColor(dc);
 	{
+		Gdiplus::Graphics g(dc);
+		
 		SetBkColor(dc, bkColor.has_value() ? bkColor.value() : GetSysColor(COLOR_WINDOW));
-		auto textColor = GetValueOrParent<ShadowNode::ForegroundProperty>();
-		auto tcOld = SetTextColor(dc, textColor.has_value() ? textColor.value() : GetSysColor(COLOR_WINDOWTEXT));
-		HGDIOBJ oldFont{};
-		auto hfont = GetValueOrParent<ShadowNode::HFontProperty>();
-		if (hfont && hfont.value()) {
-			oldFont = SelectObject(dc, hfont.value());
-		}
+		auto textColor_ = GetValueOrParent<ShadowNode::ForegroundProperty>();
+		auto textColor= textColor_.has_value() ? textColor_.value() : GetSysColor(COLOR_WINDOWTEXT);
+		Gdiplus::Color c(GetRValue(textColor), GetGValue(textColor), GetBValue(textColor));
+		auto fontFamily = GetValueOrParentOrDefault<ShadowNode::FontFamilyProperty>(L"Segoe UI");
+		auto fontSize = GetValueOrParentOrDefault<ShadowNode::FontSizeProperty>(12.f);
+		Gdiplus::Font font(fontFamily.c_str(), fontSize);
+
 		auto textAlign = GetValueOrParent<ShadowNode::TextAlignProperty>();
 		constexpr static auto DefaultTextAlign = static_cast<TextAlign>(TA_LEFT | TA_TOP | TA_NOUPDATECP);
 		if (!textAlign.has_value()) {
 			textAlign = DefaultTextAlign;
 		}
 
-		//auto oldAlign = SetTextAlign(dc, static_cast<UINT>(textAlign.value_or(DefaultTextAlign)));
-
 		UINT format{};
+		Gdiplus::StringAlignment sa{};
 		if (*textAlign & TextAlign::Center) {
 			format |= DT_CENTER;
+			sa = Gdiplus::StringAlignment::StringAlignmentCenter;
 		}
 		else if (*textAlign & TextAlign::Left) {
 			format |= DT_LEFT;
+			sa = Gdiplus::StringAlignment::StringAlignmentNear;
 		}
 		else if (*textAlign & TextAlign::Right) {
 			format |= DT_RIGHT;
+			sa = Gdiplus::StringAlignment::StringAlignmentFar;
 		}
 		if (*textAlign & TextAlign::Baseline) {
 			// etc.
@@ -227,14 +233,17 @@ void RawTextShadowNode::PaintForeground(HDC dc) {
 		r.bottom -= r.top;
 		r.left = 0;
 		r.top = 0;
-		float scale = GetDpiForWindow(Parent()->window) / 96.0f;
+
+		Gdiplus::RectF rc(0, 0, r.right, r.bottom);
+
+		float scale = GetScaleFactor();
+		Gdiplus::StringFormat sf{};
+		sf.SetAlignment(sa);
+		Gdiplus::SolidBrush brush(c);
+		g.DrawString(text->c_str(), -1, &font, rc, &sf, &brush);
 		//DrawText(dc, text.value().c_str(), -1, &r, 0);
-		DrawTextW(dc, text->c_str(), -1, &r, format);
+//		DrawTextW(dc, text->c_str(), -1, &r, format);
 		//SetTextAlign(dc, oldAlign);
-		if (oldFont) {
-			SelectObject(dc, oldFont);
-		}
-		SetTextColor(dc, tcOld);
 		SetBkColor(dc, bkOld);
 	}
 }

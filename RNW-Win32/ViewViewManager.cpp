@@ -62,8 +62,8 @@ static auto MouseEventArgs(int64_t tag, WPARAM wParam, LPARAM lParam) {
 	};
 }
 
-void ViewViewManager::UpdateLayout(ShadowNode* node, int left, int top, int width, int height) {
-	SetWindowPos(node->window, nullptr, left, top, width, height, SWP_NOZORDER);
+void ViewViewManager::UpdateLayout(ShadowNode* node, float left, float top, float width, float height) {
+	SetWindowPos(node->window, nullptr, std::lround(left), std::lround(top), std::lround(width), std::lround(height), SWP_NOZORDER);
 	if (m_kind == ViewKind::Text) {
 		for (const auto& child_weak : node->m_children) {
 			if (auto child = child_weak.lock()) {
@@ -228,7 +228,7 @@ void ViewViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowN
 		}
 	}
 	if (dirty) {
-		node->ResetFont();
+		node->CreateFont();
 		GetUIManager()->DirtyYogaNode(reactTag);
 	}
 }
@@ -435,14 +435,7 @@ std::shared_ptr<PaperUIManager> IWin32ViewManager::GetUIManager() const {
 	return PaperUIManager::GetFromContext(m_context.Handle());
 }
 
-void ShadowNode::ResetFont() {
-	auto hFont = GetValue<ShadowNode::HFontProperty>();
-	if (hFont) {
-		DeleteObject(hFont.value());
-		hFont = nullptr;
-	}
-	LOGFONT lf = GetLogFont();
-	SetValue<ShadowNode::HFontProperty>(CreateFontIndirectW(&lf));
+void ShadowNode::CreateFont() {
 }
 
 
@@ -481,9 +474,8 @@ YGMeasureFunc ButtonViewManager::GetCustomMeasureFunction() {
 	return DefaultYogaSelfMeasureFunc;
 }
 
-void ButtonShadowNode::ResetFont() {
-	ShadowNode::ResetFont();
-	if (auto font = GetValue<ShadowNode::HFontProperty>()) {
-		SendMessage(window, WM_SETFONT, reinterpret_cast<WPARAM>(font.value()), TRUE);
-	}
+void ButtonShadowNode::CreateFont() {
+	auto lf = GetLogFont();
+	auto hfont = CreateFontIndirect(&lf);
+	SendMessage(window, WM_SETFONT, reinterpret_cast<WPARAM>(hfont), TRUE);
 }
