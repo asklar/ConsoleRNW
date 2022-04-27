@@ -172,6 +172,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="Properties.h" />
     <ClInclude Include="ShadowNode.h" />
+    <ClInclude Include="TextViewManager.h" />
     <ClInclude Include="ViewViewManager.h" />
     <ClInclude Include="Win32ReactRootView.h" />
     <ClInclude Include="Resource.h" />

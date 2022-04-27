@@ -228,6 +228,7 @@ void ViewViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowN
 		}
 	}
 	if (dirty) {
+		node->ResetFont();
 		GetUIManager()->DirtyYogaNode(reactTag);
 	}
 }
@@ -337,66 +338,6 @@ void ShadowNode::PaintForeground(HDC dc) {
 	}
 }
 
-void TextShadowNode::PaintForeground(HDC dc) {
-	std::for_each(m_children.begin(), m_children.end(), [dc](const auto& child_weak) {
-		if (auto child = child_weak.lock()) {
-			child->OnPaint(dc);
-		}
-		});
-}
-
-void RawTextShadowNode::PaintForeground(HDC dc) {
-	auto text = GetValue<ShadowNode::TextProperty>();
-	auto bkColor = GetValueOrParent<ShadowNode::BackgroundProperty>();
-	
-	auto bkOld = GetBkColor(dc);
-	{
-		SetBkColor(dc, bkColor.has_value() ? bkColor.value() : GetSysColor(COLOR_WINDOW));
-		auto textColor = GetValueOrParent<ShadowNode::ForegroundProperty>();
-		auto tcOld = SetTextColor(dc, textColor.has_value() ? textColor.value() : GetSysColor(COLOR_WINDOWTEXT));
-		HGDIOBJ oldFont{};
-		if (Parent()->m_hFont) {
-			oldFont = SelectObject(dc, Parent()->m_hFont);
-		}
-		auto textAlign = GetValueOrParent<ShadowNode::TextAlignProperty>();
-		constexpr static auto DefaultTextAlign = static_cast<TextAlign>(TA_LEFT | TA_TOP | TA_NOUPDATECP);
-		if (!textAlign.has_value()) {
-			textAlign = DefaultTextAlign;
-		}
-
-		//auto oldAlign = SetTextAlign(dc, static_cast<UINT>(textAlign.value_or(DefaultTextAlign)));
-
-		UINT format{};
-		if (*textAlign & TextAlign::Center) {
-			format |= DT_CENTER;
-		}
-		else if (*textAlign & TextAlign::Left) {
-			format |= DT_LEFT;
-		}
-		else if (*textAlign & TextAlign::Right) {
-			format |= DT_RIGHT;
-		}
-		if (*textAlign & TextAlign::Baseline) {
-			// etc.
-		}
-
-		RECT r;
-		GetWindowRect(Parent()->window, &r);
-		r.right -= r.left;
-		r.bottom -= r.top;
-		r.left = 0;
-		r.top = 0;
-		float scale = GetDpiForWindow(Parent()->window) / 96.0f;
-		//DrawText(dc, text.value().c_str(), -1, &r, 0);
-		DrawTextW(dc, text->c_str(), -1, &r, format);
-		//SetTextAlign(dc, oldAlign);
-		if (oldFont) {
-			SelectObject(dc, oldFont);
-		}
-		SetTextColor(dc, tcOld);
-		SetBkColor(dc, bkOld);
-	}
-}
 
 LRESULT ButtonViewManager::WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubClass, DWORD_PTR dwRefData) {
 	auto node = GetShadowNode(hwnd);
@@ -466,6 +407,8 @@ winrt::Microsoft::ReactNative::JSValueObject ButtonViewManager::GetConstants()  
 				{ "enableFocusRing", "boolean" },
 				{ "tabIndex", "number" },
 				{ "title", "string" },
+				{ "fontFamily", "string" },
+				{ "fontSize", "number" },
 			} },
 			{ "bubblingEventTypes", JSValueObject{} },
 			{ "directEventTypes", JSValueObject{
@@ -491,10 +434,18 @@ std::shared_ptr<PaperUIManager> IWin32ViewManager::GetUIManager() const {
 	return PaperUIManager::GetFromContext(m_context.Handle());
 }
 
+void ShadowNode::ResetFont() {
+	auto hFont = GetValue<ShadowNode::HFontProperty>();
+	if (hFont) {
+		DeleteObject(hFont.value());
+		hFont = nullptr;
+	}
+	LOGFONT lf = GetLogFont();
+	SetValue<ShadowNode::HFontProperty>(CreateFontIndirectW(&lf));
+}
+
+
 #ifdef _DEBUG
-
-
-
 void ShadowNode::PrintNode(int level) const {
 	cdbg << "VM=" << (m_vm ? typeid(*m_vm).name() : "ROOT") << "\n";
 	auto indent = std::string(level * 2, ' ');
@@ -504,8 +455,12 @@ void ShadowNode::PrintNode(int level) const {
 			cdbg << indent << "    \t" << magic_enum::enum_name(static_cast<typename ShadowNode::property_index_t>(i)) << " = " << strValue << "\n";
 		}
 	}
-	for (const auto& v : m_strings) {
-		cdbg << indent << "    \t" << magic_enum::enum_name(v.first) << " = " << winrt::to_string(v.second) << "\n";
+	for (const auto& v : m_sparseProperties) {
+		std::string value;
+		if (auto ws = std::get_if<std::wstring>(&v.second)) {
+			value = winrt::to_string(*ws);
+		}
+		cdbg << indent << "    \t" << magic_enum::enum_name(v.first) << " = " << value << "\n";
 	}
 }
 #endif
@@ -523,4 +478,11 @@ YGSize DefaultYogaSelfMeasureFunc(
 
 YGMeasureFunc ButtonViewManager::GetCustomMeasureFunction() {
 	return DefaultYogaSelfMeasureFunc;
+}
+
+void ButtonShadowNode::ResetFont() {
+	ShadowNode::ResetFont();
+	if (auto font = GetValue<ShadowNode::HFontProperty>()) {
+		SendMessage(window, WM_SETFONT, reinterpret_cast<WPARAM>(font.value()), TRUE);
+	}
 }

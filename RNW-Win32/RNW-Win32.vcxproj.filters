@@ -60,6 +60,9 @@
     <ClInclude Include="magic_enum.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="TextViewManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RNW-Win32.cpp">

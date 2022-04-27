@@ -5,7 +5,16 @@
 #include "IWin32ViewManager.h"
 struct IWin32ViewManager;
 
-struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringPropertyIndex> {
+
+YGSize MeasureText(HWND window, std::wstring_view str, bool withScale = true);
+inline YGSize operator+(const YGSize& a, const YGSize& b) {
+    return { a.width + b.width, a.height + b.height };
+}
+inline YGSize operator*(const YGSize& a, float f) {
+    return { a.width * f, a.height * f};
+}
+
+struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparsePropertyIndex, std::wstring, HFONT> {
     struct YogaNodeDeleter {
         void operator()(YGNodeRef node) {
             YGNodeFree(node);
@@ -57,25 +66,25 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringProperty
     using OnPressProperty = Property<bool, PropertyIndex::OnPress>;
     using IsMouseOverProperty = Property<bool, PropertyIndex::IsMouseOver>;
 
-    using TextProperty = StringProperty<StringPropertyIndex::Text>;
+    using TextProperty = SparseProperty<SparsePropertyIndex::Text>;
     using TextAlignProperty = Property<TextAlign, PropertyIndex::TextAlign>;
     using FontSizeProperty = Property<float, PropertyIndex::FontSize>;
-    using FontFamilyProperty = StringProperty<StringPropertyIndex::FontFamily>;
-
+    using FontFamilyProperty = SparseProperty<SparsePropertyIndex::FontFamily>;
+    using HFontProperty = SparseProperty<SparsePropertyIndex::HFont, HFONT>;
 
     template<typename TProperty>
-    auto GetValue() {
+    auto GetValue() const {
         return TProperty::Get(this);
     }
 
     template<typename TProperty>
-    typename TProperty::type GetValueOrDefault() {
+    typename TProperty::type GetValueOrDefault() const {
         auto v = TProperty::Get(this);
         return v.has_value() ? v.value() : typename TProperty::type();
     }
 
     template<typename TProperty>
-    std::optional<typename TProperty::type> GetValueOrParent() {
+    std::optional<typename TProperty::type> GetValueOrParent() const {
         auto v = GetValue<TProperty>();
         if (auto parent = m_parent.lock(); parent && !v.has_value()) {
             return parent->GetValueOrParent<TProperty>();
@@ -84,13 +93,13 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringProperty
     }
 
     template<typename TProperty>
-    typename TProperty::type GetValueOrParentOrDefault() {
-        auto v = GetValueOrParent();
+    typename TProperty::type GetValueOrParentOrDefault() const {
+        auto v = GetValueOrParent<TProperty>();
         return v.has_value() ? v.value() : typename TProperty::type();
     }
 
     template<typename TProperty>
-    void SetValue(const typename TProperty::type& value) {
+    void SetValue(typename TProperty::type const& value) {
         TProperty::Set(this, value);
     }
 
@@ -101,7 +110,16 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, StringStorage<StringProperty
         return {};
     }
 
+    float GetScaleFactor() const {
+        return GetDpiForWindow(window) / 96.0f;
+    }
+
     virtual bool WantsMouseMove() { return true; }
+
+    virtual YGSize MeasureText() const;
+    LOGFONT GetLogFont() const;
+    virtual void ResetFont();
+
 protected:
     virtual void PaintBackground(HDC dc);
     virtual void PaintForeground(HDC dc);
@@ -115,7 +133,7 @@ struct ImageShadowNode : ShadowNode {
         float height,
         YGMeasureMode heightMode) override;
 
-    using SourceProperty = StringProperty<StringPropertyIndex::Source>;
+    using SourceProperty = SparseProperty<SparsePropertyIndex::Source>;
 
 private:
     std::unique_ptr<Gdiplus::Bitmap> m_bitmap;
@@ -129,10 +147,8 @@ struct TextShadowNode : ShadowNode {
         YGMeasureMode widthMode,
         float height,
         YGMeasureMode heightMode) override;
+    YGSize MeasureText() const override;
     bool WantsMouseMove() override { return false; }
-
-    HFONT m_hFont{};
-    void ResetFont();
 };
 struct RawTextShadowNode : ShadowNode {
     RawTextShadowNode(HWND w, YGConfigRef config, IWin32ViewManager* vm) : ShadowNode(w, config, vm){}
@@ -151,6 +167,7 @@ struct ButtonShadowNode : ShadowNode {
         float height,
         YGMeasureMode heightMode) override {
 
-        return { 150, 50 };
+        return MeasureText() + YGSize{ 14, 14 } * GetScaleFactor();
     }
+    void ResetFont() override;
 };

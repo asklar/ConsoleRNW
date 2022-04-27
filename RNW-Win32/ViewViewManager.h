@@ -161,6 +161,11 @@ struct ViewManagerProperties {
 			}
 			node->SetValue<TProperty>(ta);
 		}
+		else if constexpr (std::is_same_v<typename TProperty::type, std::wstring>) {
+			auto hstr = winrt::to_hstring(value.AsString());
+			std::wstring ws = hstr.c_str();
+			node->SetValue<TProperty>(ws);
+		}
 		else {
 			static_assert(sizeof(TProperty) == 0, "can't convert jsvalue type to property type");
 		}
@@ -197,6 +202,9 @@ struct ViewProperties : ViewManagerProperties<ViewProperties> {
 		//{ "onPress", Set<ShadowNode::OnPressProperty> },
 		{ "onClick", Set<ShadowNode::OnPressProperty> },
 		{ "text", Set<ShadowNode::TextProperty>, true },
+		{ "fontSize", Set<ShadowNode::FontSizeProperty>, true },
+		{ "fontFamily", Set<ShadowNode::FontFamilyProperty>, true },
+
 	};
 };
 

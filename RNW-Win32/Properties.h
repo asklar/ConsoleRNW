@@ -160,14 +160,29 @@ enum class PropertyIndex {
     Last,
 };
 
+
+enum class SparsePropertyIndex {
+    Text,
+    FontFamily,
+    Source,
+    HFont,
+    Last,
+};
+
+template<typename TStringIndexEnum, typename... Types>
+struct SparseStorage {
+    std::unordered_map<TStringIndexEnum, std::variant<Types...>> m_sparseProperties;
+};
+
+
 template<typename TBackingType, PropertyIndex index>
 struct Property {
     using type = TBackingType;
-    static std::optional<TBackingType> Get(PropertyStorage<PropertyIndex>& storage) {
+    static std::optional<TBackingType> Get(const PropertyStorage<PropertyIndex>& storage) {
         return storage.get<TBackingType>(static_cast<int>(index));
     }
 
-    static std::optional<TBackingType> Get(PropertyStorage<PropertyIndex>* storage) {
+    static std::optional<TBackingType> Get(const PropertyStorage<PropertyIndex>* storage) {
         return Get(*storage);
     }
 
@@ -186,46 +201,46 @@ struct Property {
 };
 
 
-enum class StringPropertyIndex {
-    Text,
-    FontFamily,
-    Source,
-    Last,
-};
+template<SparsePropertyIndex index, typename TBackingType = std::wstring>
+struct SparseProperty {
+    using type = TBackingType;
 
-template<typename TStringIndexEnum>
-struct StringStorage {
-    std::unordered_map<TStringIndexEnum, std::wstring> m_strings;
-};
-
-template<StringPropertyIndex index>
-struct StringProperty {
-    using type = std::wstring_view;
-
-    static std::optional<std::wstring> Get(StringStorage<StringPropertyIndex>& storage) {
-        const auto& v = storage.m_strings.find(index);
-        if (v != storage.m_strings.end()) {
-            return v->second;
+    template<typename... Types>
+    static std::optional<TBackingType> Get(const SparseStorage<SparsePropertyIndex, Types...>& storage) {
+        const auto& v = storage.m_sparseProperties.find(index);
+        if (v != storage.m_sparseProperties.end()) {
+            return std::get<TBackingType>(v->second);
         }
         else {
             return std::nullopt;
         }
     }
 
-    static std::optional<std::wstring> Get(StringStorage<StringPropertyIndex>* storage) {
+    template<typename... Types>
+    static std::optional<TBackingType> Get(const SparseStorage<SparsePropertyIndex, Types...>* storage) {
         return Get(*storage);
     }
 
-    static void Set(StringStorage<StringPropertyIndex>& storage, std::wstring_view value) {
-        storage.m_strings[index] = value;
+    template<typename... Types>
+    static void Set(SparseStorage<SparsePropertyIndex, Types...>& storage, const TBackingType& value) {
+        storage.m_sparseProperties.emplace(index, value);
     }
 
-    static void Set(StringStorage<StringPropertyIndex>* storage, std::wstring_view value) {
+    template<typename... Types>
+    static void Set(SparseStorage<SparsePropertyIndex, Types...>* storage, const TBackingType& value) {
         return Set(*storage, value);
     }
 
-    static void Clear(StringStorage<StringPropertyIndex>& storage) {
-        storage.m_strings.erase(index);
+    //static std::enable_if_t<std::is_same_v<TBackingType, std::wstring>> Set(SparseStorage<SparsePropertyIndex>& storage, std::wstring_view value) {
+    //    storage.m_sparseProperties[index] = std::wstring(value);
+    //}
+
+    //static std::enable_if_t<std::is_same_v<TBackingType, std::wstring>> Set(SparseStorage<SparsePropertyIndex>* storage, std::wstring_view value) {
+    //    return Set(*storage, value);
+    //}
+    template<typename... Types>
+    static void Clear(SparseStorage<SparsePropertyIndex, Types...>& storage) {
+        storage.m_sparseProperties.erase(index);
     }
 };
 

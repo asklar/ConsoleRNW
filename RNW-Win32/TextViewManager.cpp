@@ -2,6 +2,7 @@
 #include "ViewViewManager.h"
 #include "PaperUIManager.h"
 #include <strsafe.h>
+#include "TextViewManager.h"
 
 using JSValueObject = winrt::Microsoft::ReactNative::JSValueObject;
 
@@ -78,9 +79,7 @@ std::shared_ptr<ShadowNode> TextViewManager::Create(int64_t reactTag, int64_t ro
 
 struct TextProperties : ViewManagerProperties<TextProperties> {
 	constexpr static setter_entry_t setters[] = {
-		{ "fontSize", Set<ShadowNode::FontSizeProperty>, true },
 		{ "textAlign", Set<ShadowNode::TextAlignProperty>, true },
-		{ "fontFamily", Set<ShadowNode::FontFamilyProperty>, true },
 	};
 };
 
@@ -100,19 +99,16 @@ void TextViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowN
 	ViewViewManager::UpdateProperties(reactTag, node, props);
 
 	if (dirty) {
-		std::static_pointer_cast<TextShadowNode>(node)->ResetFont();
+		node->ResetFont();
 		GetUIManager()->DirtyYogaNode(reactTag);
 	}
 }
 
-void TextShadowNode::ResetFont() {
-	auto fontSize = GetValueOrParent<ShadowNode::FontSizeProperty>();
-	if (m_hFont) {
-		DeleteObject(m_hFont);
-		m_hFont = nullptr;
-	}
+LOGFONT ShadowNode::GetLogFont() const {
 	LOGFONT lf{};
-	auto scale = GetDpiForWindow(window) / 96.0f;
+	auto scale = GetScaleFactor();
+
+	auto fontSize = GetValueOrParent<ShadowNode::FontSizeProperty>();
 	lf.lfHeight = static_cast<LONG>((fontSize.has_value() ? -fontSize.value() : -12) * scale);
 
 	lf.lfWeight = FW_NORMAL;
@@ -123,29 +119,122 @@ void TextShadowNode::ResetFont() {
 	lf.lfPitchAndFamily = VARIABLE_PITCH | FF_DONTCARE;
 	auto fontFamily = GetValue<ShadowNode::FontFamilyProperty>();
 	StringCchCopy(lf.lfFaceName, std::size(lf.lfFaceName), fontFamily.has_value() ? fontFamily->c_str() : L"Segoe UI");
-
-	m_hFont = CreateFontIndirectW(&lf);
+	return lf;
 }
+
 
 //winrt::Microsoft::ReactNative::JSValueObject GetConstants() {}
 void TextViewManager::UpdateLayout(ShadowNode* node, int left, int top, int width, int height) {
 	ViewViewManager::UpdateLayout(node, left, top, width, height);
 }
 
+YGSize MeasureText(HWND window, std::wstring_view str, bool withScale)
+{
+	SIZE sz{};
+	auto len = static_cast<int>(str.length());
+	auto hdc = GetDC(window);
+
+	Gdiplus::Graphics g(window);
+	GetTextExtentPoint32(hdc, str.data(), len, &sz);
+	float scale = withScale ? GetDpiForWindow(window) / 96.0f : 1.f;
+	return { static_cast<float>(sz.cx) * scale , static_cast<float>(sz.cy) * scale };
+}
+
 YGSize TextShadowNode::Measure(float width,
 	YGMeasureMode widthMode,
 	float height,
 	YGMeasureMode heightMode) {
-	auto str = m_children[0].lock()->GetValue<ShadowNode::TextProperty>();
-	if (str.has_value()) {
-		auto len = static_cast<int>(str->length());
-		SIZE sz{};
-		auto hdc = GetDC(window);
-
-		GetTextExtentPoint32(hdc, str.value().c_str(), len, &sz);
-		float scale = GetDpiForWindow(window) / 96.0f;
-		return { static_cast<float>(sz.cx) * scale , static_cast<float>(sz.cy) * scale };
-	}
-	return { 42,42 };
+	return MeasureText();
 }
 
+YGSize TextShadowNode::MeasureText() const {
+	return m_children[0].lock()->MeasureText();
+}
+
+
+YGSize ShadowNode::MeasureText() const {
+	auto str = GetValue<ShadowNode::TextProperty>();
+	if (str.has_value()) {
+		auto len = static_cast<int>(str->length());
+		auto hdc = GetDC(window);
+
+		Gdiplus::Graphics g(window);
+
+		Gdiplus::Font font(hdc, GetValueOrParentOrDefault<ShadowNode::HFontProperty>());
+		Gdiplus::RectF boundingBox{};
+		g.MeasureString(str->c_str(), len, &font, { 0.f, 0.f }, &boundingBox);
+
+		float scale = 1.f;
+		return { static_cast<float>(boundingBox.Width) * scale , static_cast<float>(boundingBox.Height) * scale };
+	}
+	return { 42,42 };
+
+	//SIZE sz{};
+	//const auto& str = this->GetValue<ShadowNode::TextProperty>();
+	//if (str) {
+	//	return ::MeasureText(window, str.value());
+	//}
+	//return { 42,42 };
+}
+
+void TextShadowNode::PaintForeground(HDC dc) {
+	std::for_each(m_children.begin(), m_children.end(), [dc](const auto& child_weak) {
+		if (auto child = child_weak.lock()) {
+			child->OnPaint(dc);
+		}
+		});
+}
+
+void RawTextShadowNode::PaintForeground(HDC dc) {
+	auto text = GetValue<ShadowNode::TextProperty>();
+	auto bkColor = GetValueOrParent<ShadowNode::BackgroundProperty>();
+
+	auto bkOld = GetBkColor(dc);
+	{
+		SetBkColor(dc, bkColor.has_value() ? bkColor.value() : GetSysColor(COLOR_WINDOW));
+		auto textColor = GetValueOrParent<ShadowNode::ForegroundProperty>();
+		auto tcOld = SetTextColor(dc, textColor.has_value() ? textColor.value() : GetSysColor(COLOR_WINDOWTEXT));
+		HGDIOBJ oldFont{};
+		auto hfont = GetValueOrParent<ShadowNode::HFontProperty>();
+		if (hfont && hfont.value()) {
+			oldFont = SelectObject(dc, hfont.value());
+		}
+		auto textAlign = GetValueOrParent<ShadowNode::TextAlignProperty>();
+		constexpr static auto DefaultTextAlign = static_cast<TextAlign>(TA_LEFT | TA_TOP | TA_NOUPDATECP);
+		if (!textAlign.has_value()) {
+			textAlign = DefaultTextAlign;
+		}
+
+		//auto oldAlign = SetTextAlign(dc, static_cast<UINT>(textAlign.value_or(DefaultTextAlign)));
+
+		UINT format{};
+		if (*textAlign & TextAlign::Center) {
+			format |= DT_CENTER;
+		}
+		else if (*textAlign & TextAlign::Left) {
+			format |= DT_LEFT;
+		}
+		else if (*textAlign & TextAlign::Right) {
+			format |= DT_RIGHT;
+		}
+		if (*textAlign & TextAlign::Baseline) {
+			// etc.
+		}
+
+		RECT r;
+		GetWindowRect(Parent()->window, &r);
+		r.right -= r.left;
+		r.bottom -= r.top;
+		r.left = 0;
+		r.top = 0;
+		float scale = GetDpiForWindow(Parent()->window) / 96.0f;
+		//DrawText(dc, text.value().c_str(), -1, &r, 0);
+		DrawTextW(dc, text->c_str(), -1, &r, format);
+		//SetTextAlign(dc, oldAlign);
+		if (oldFont) {
+			SelectObject(dc, oldFont);
+		}
+		SetTextColor(dc, tcOld);
+		SetBkColor(dc, bkOld);
+	}
+}
