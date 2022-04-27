@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Assets">
+      <UniqueIdentifier>{b02b4903-8126-456c-9728-9b4a4d34f497}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -83,6 +86,9 @@
     <ClCompile Include="TextViewManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ImageViewManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="RNW-Win32.rc">
@@ -104,5 +110,10 @@
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="app.manifest" />
+  </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="react.png">
+      <Filter>Assets</Filter>
+    </CopyFileToFolders>
   </ItemGroup>
 </Project>

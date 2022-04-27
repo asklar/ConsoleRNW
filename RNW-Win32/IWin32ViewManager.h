@@ -14,10 +14,10 @@ struct IWin32ViewManager {
 
     virtual void UpdateLayout(ShadowNode* node, int left, int top, int width, int height) = 0;
     static ShadowNode* GetShadowNode(HWND hwnd) {
-        return reinterpret_cast<ShadowNode*>(GetWindowLongPtrW(hwnd, 0));
+        return reinterpret_cast<ShadowNode*>(GetPropW(hwnd, L"ShadowNode"));
     }
     static void SetShadowNode(HWND hwnd, ShadowNode* node) {
-        SetWindowLongPtrW(hwnd, 0, reinterpret_cast<LONG_PTR>(node));
+        SetPropW(hwnd, L"ShadowNode", reinterpret_cast<HANDLE>(node));
     }
     static int64_t GetTag(HWND hwnd) {
         return reinterpret_cast<int64_t>(GetProp(hwnd, L"Tag"));
@@ -48,7 +48,7 @@ struct IWin32ViewManager {
     }
 
     winrt::Microsoft::ReactNative::ReactContext m_context;
-    YGConfigRef m_yogaConfig;
+    YGConfigRef m_yogaConfig{nullptr};
 
     std::shared_ptr<PaperUIManager> GetUIManager() const;
 };

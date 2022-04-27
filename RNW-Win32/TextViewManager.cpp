@@ -80,10 +80,12 @@ struct TextProperties : ViewManagerProperties<TextProperties> {
 	constexpr static setter_entry_t setters[] = {
 		{ "fontSize", Set<ShadowNode::FontSizeProperty>, true },
 		{ "textAlign", Set<ShadowNode::TextAlignProperty>, true },
+		{ "fontFamily", Set<ShadowNode::FontFamilyProperty>, true },
 	};
 };
 
 void TextViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) {
+	bool dirty = false;
 	for (const auto& v : props) {
 		const auto& propName = v.first;
 		const auto& value = v.second;
@@ -91,13 +93,15 @@ void TextViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowN
 		if (auto setter = TextProperties::GetProperty(propName)) {
 			setter->setter(node.get(), value);
 			if (setter->dirtyLayout) {
-				std::static_pointer_cast<TextShadowNode>(node)->ResetFont();
-				GetUIManager()->DirtyYogaNode(reactTag);
+				dirty = true;
 			}
 		}
-		else {
-			ViewViewManager::UpdateProperties(reactTag, node, props);
-		}
+	}
+	ViewViewManager::UpdateProperties(reactTag, node, props);
+
+	if (dirty) {
+		std::static_pointer_cast<TextShadowNode>(node)->ResetFont();
+		GetUIManager()->DirtyYogaNode(reactTag);
 	}
 }
 

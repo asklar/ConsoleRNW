@@ -63,3 +63,5 @@ inline constexpr cdbg_t cdbg{};
 
 
 #include <gdiplus.h>
+#include <commctrl.h>
+

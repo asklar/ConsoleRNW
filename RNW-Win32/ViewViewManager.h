@@ -54,6 +54,11 @@ struct ButtonViewManager : ViewViewManager {
 	std::shared_ptr<ShadowNode> Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props);
 	void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
 	winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
+	YGMeasureFunc GetCustomMeasureFunction();
+private:
+	static void SetText(ShadowNode* node, const winrt::Microsoft::ReactNative::JSValue& v);
+	static LRESULT WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubClass, DWORD_PTR dwRefData);
+	friend struct ButtonProperties;
 };
 
 struct ImageViewManager : ViewViewManager {
@@ -63,6 +68,7 @@ struct ImageViewManager : ViewViewManager {
 	winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
 	//void UpdateLayout(ShadowNode* node, int left, int top, int width, int height) override;
 	YGMeasureFunc GetCustomMeasureFunction() override;
+	static void SetSource(ShadowNode* node, const winrt::Microsoft::ReactNative::JSValue& v);
 };
 
 template<typename TProperties>
@@ -182,6 +188,12 @@ struct ViewProperties : ViewManagerProperties<ViewProperties> {
 		//{ "onPress", Set<ShadowNode::OnPressProperty> },
 		{ "onClick", Set<ShadowNode::OnPressProperty> },
 		{ "text", Set<ShadowNode::TextProperty>, true },
+	};
+};
+
+struct ImageProperties : ViewManagerProperties<ImageProperties> {
+	constexpr static setter_entry_t setters[] = {
+		{ "source", ImageViewManager::SetSource, true },
 	};
 };
 

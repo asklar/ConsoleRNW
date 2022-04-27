@@ -114,6 +114,12 @@ struct ImageShadowNode : ShadowNode {
         YGMeasureMode widthMode,
         float height,
         YGMeasureMode heightMode) override;
+
+    using SourceProperty = StringProperty<StringPropertyIndex::Source>;
+
+private:
+    std::unique_ptr<Gdiplus::Bitmap> m_bitmap;
+    friend struct ImageViewManager;
 };
 
 struct TextShadowNode : ShadowNode {
@@ -135,5 +141,16 @@ struct RawTextShadowNode : ShadowNode {
     bool WantsMouseMove() override { return false; }
     std::shared_ptr<TextShadowNode> Parent() const {
         return std::static_pointer_cast<TextShadowNode>(m_parent.lock());
+    }
+};
+
+struct ButtonShadowNode : ShadowNode {
+    ButtonShadowNode(HWND w, YGConfigRef config, IWin32ViewManager* vm) : ShadowNode(w, config, vm) {}
+    YGSize Measure(float width,
+        YGMeasureMode widthMode,
+        float height,
+        YGMeasureMode heightMode) override {
+
+        return { 150, 50 };
     }
 };

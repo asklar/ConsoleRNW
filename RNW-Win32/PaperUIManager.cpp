@@ -52,8 +52,9 @@ void PaperUIManager::EnsureViewManager(const std::string& viewManagerName) {
 			{ "RCTRawText", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef yogaConfig) { return std::unique_ptr<IWin32ViewManager>(new RawTextViewManager(context, yogaConfig)); }},
 			{ "RCTText", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef yogaConfig) { return std::unique_ptr<IWin32ViewManager>(new TextViewManager(context, yogaConfig)); }},
 			{ "Text", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef yogaConfig) { return std::unique_ptr<IWin32ViewManager>(new TextViewManager(context, yogaConfig)); }},
-			{ "RCTButton", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ButtonViewManager(context, ycr)); }},
+			{ "NativeButton", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ButtonViewManager(context, ycr)); }},
 			{ "RCTImageView", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ImageViewManager(context, ycr)); }},
+			{ "Image", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ImageViewManager(context, ycr)); }},
 		};
 		const auto& entry = std::find_if(std::begin(viewMgrFactory), std::end(viewMgrFactory), [&viewManagerName](const auto& i) { return i.name == viewManagerName; });
 		m_viewManagers[viewManagerName] = entry->make(m_context, m_yogaConfig);
@@ -228,7 +229,7 @@ void PaperUIManager::createView(
 
         auto result = m_nodes.emplace(reactTag, shadowNode);
         if (result.second) {
-            SetWindowLongPtrW(shadowNode->window, 0, reinterpret_cast<LONG_PTR>(shadowNode.get()));
+            vm->SetShadowNode(shadowNode->window, shadowNode.get());
 
             StyleYogaNode(*shadowNode, shadowNode->yogaNode.get(), props);
 

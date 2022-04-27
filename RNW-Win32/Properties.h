@@ -189,6 +189,7 @@ struct Property {
 enum class StringPropertyIndex {
     Text,
     FontFamily,
+    Source,
     Last,
 };
 

@@ -181,6 +181,7 @@
     <ClInclude Include="YogaHelpers.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ImageViewManager.cpp" />
     <ClCompile Include="PaperUIManager.cpp" />
     <ClCompile Include="RNW-Win32.cpp" />
     <ClCompile Include="pch.cpp">
@@ -196,6 +197,9 @@
     <ResourceCompile Include="RNW-Win32.rc" />
   </ItemGroup>
   <ItemGroup>
+    <CopyFileToFolders Include="react.png">
+      <DeploymentContent>true</DeploymentContent>
+    </CopyFileToFolders>
     <Image Include="RNW-Win32.ico" />
     <Image Include="small.ico" />
   </ItemGroup>

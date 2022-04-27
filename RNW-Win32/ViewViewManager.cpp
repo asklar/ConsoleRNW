@@ -148,6 +148,7 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
 		EndPaint(hwnd, &ps);
 		return 0;
 	}
+	//return DefSubclassProc(hwnd, msg, wParam, lParam);
 	return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
@@ -189,6 +190,7 @@ std::shared_ptr<ShadowNode> ViewViewManager::Create(int64_t reactTag, int64_t ro
 
 
 void ViewViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) {
+	bool dirty = false;
 	for (const auto& v : props) {
 		const auto& propName = v.first;
 		const auto& value = v.second;
@@ -196,13 +198,14 @@ void ViewViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowN
 		OutputDebugStringA(fmt::format("UpdateProperties: {} {}\n", reactTag, propName).c_str());
 		if (auto setter = ViewProperties::GetProperty(propName)) {
 			setter->setter(node.get(), value);
-			if (setter->dirtyLayout) {
-				GetUIManager()->DirtyYogaNode(reactTag);
-			}
+			if (setter->dirtyLayout) dirty = true;
 		}
 		else {
 			//DebugBreak();
 		}
+	}
+	if (dirty) {
+		GetUIManager()->DirtyYogaNode(reactTag);
 	}
 }
 
@@ -372,39 +375,50 @@ void RawTextShadowNode::PaintForeground(HDC dc) {
 	}
 }
 
+LRESULT ButtonViewManager::WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubClass, DWORD_PTR dwRefData) {
+	return ViewViewManager::ViewWndProc(hwnd, uMsg, wParam, lParam);
+}
+
 std::shared_ptr<ShadowNode> ButtonViewManager::Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props) {
-	return std::make_shared<ShadowNode>(CreateWindow(L"Button", L"", WS_CHILD, 0, 0, 0, 0, rootHWnd, nullptr, nullptr, nullptr), nullptr, this);
+	auto btn = CreateWindowW(L"BUTTON", L"", 
+		WS_CHILD | WS_TABSTOP | WS_VISIBLE | BS_DEFPUSHBUTTON | BS_TEXT, 
+		0, 0, 0, 0, rootHWnd, 
+		nullptr, nullptr, nullptr);
+	//SetWindowSubclass(btn, ButtonViewManager::WndProc, 1, 0);
+	return std::make_shared<ButtonShadowNode>(btn, m_yogaConfig, this);
 }
 
 struct ButtonProperties : ViewManagerProperties<ButtonProperties> {
 	constexpr static setter_entry_t setters[] = {
-		{ "title", Set<ShadowNode::TextProperty> },
+		{ "title", ButtonViewManager::SetText, true },
 	};
 };
+
+void ButtonViewManager::SetText(ShadowNode* node, const winrt::Microsoft::ReactNative::JSValue& v) {
+	ButtonProperties::Set<ShadowNode::TextProperty>(node, v);
+	const auto& str = node->GetValue<ShadowNode::TextProperty>();
+	auto text = str->c_str();
+	
+	SendMessage(node->window, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(text));
+}
+
 void ButtonViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) {
+	bool dirty = false;
 	for (const auto& v : props) {
 		const auto& propName = v.first;
 		const auto& value = v.second;
 
 		if (auto setter = ButtonProperties::GetProperty(propName)) {
 			setter->setter(node.get(), value);
-			if (setter->dirtyLayout) {
-				GetUIManager()->DirtyYogaNode(reactTag);
-			}
-		}
-		else {
-			ViewViewManager::UpdateProperties(reactTag, node, props);
+			if (setter->dirtyLayout) dirty = true;
 		}
 	}
+	ViewViewManager::UpdateProperties(reactTag, node, props);
+
+	if (dirty) GetUIManager()->DirtyYogaNode(reactTag);
 }
 
 winrt::Microsoft::ReactNative::JSValueObject ButtonViewManager::GetConstants()  {
-	//auto super = static_cast<ViewViewManager&>(*this).GetConstants();
-	//auto props = super["NativeProps"].MoveObject();
-	//props["title"] = "string";
-	//super["NativeProps"]. = props;
-	//return super;
-
 	auto view = JSValueObject {
 		{
 			{ "Constants", JSValueObject{} },
@@ -470,90 +484,7 @@ YGSize DefaultYogaSelfMeasureFunc(
 	return shadowNode->Measure(width, widthMode, height, heightMode);
 }
 
-void ImageShadowNode::PaintForeground(HDC dc) {
-	Gdiplus::Graphics g(dc);
-	Gdiplus::Bitmap b(L"C:/users/asklar/source/repos/ConsoleRNW/example/react.png");
-	auto w = YGNodeLayoutGetWidth(yogaNode.get());
-	auto h = YGNodeLayoutGetHeight(yogaNode.get());
-	g.DrawImage(&b, 0.f, 0.f, w, h);
-}
 
-YGSize ImageShadowNode::Measure(float width,
-	YGMeasureMode widthMode,
-	float height,
-	YGMeasureMode heightMode) {
-	return { 200, 200 };
-}
-
-YGMeasureFunc ImageViewManager::GetCustomMeasureFunction() {
+YGMeasureFunc ButtonViewManager::GetCustomMeasureFunction() {
 	return DefaultYogaSelfMeasureFunc;
 }
-
-void ImageViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) {
-	auto sn = std::static_pointer_cast<ImageShadowNode>(node);
-	for (const auto& v : props) {
-		const auto& propName = v.first;
-		const auto& value = v.second;
-
-		if (propName == "source") {
-
-		}
-		else {
-			if (auto setter = ViewProperties::GetProperty(propName)) {
-				setter->setter(node.get(), value);
-				if (setter->dirtyLayout) {
-					GetUIManager()->DirtyYogaNode(reactTag);
-				}
-			}
-		}
-	}
-}
-
-winrt::Microsoft::ReactNative::JSValueObject ImageViewManager::GetConstants() {
-	return JSValueObject{
-	{
-		{ "Constants", JSValueObject{} },
-		{ "Commands", JSValueObject{} },
-		{ "NativeProps", JSValueObject{
-			//{ "onLayout", "function" },
-			//{ "pointerEvents", "string" },
-			//{ "onClick", "function" },
-			//{ "onMouseEnter", "function" },
-			//{ "onMouseLeave", "function" },
-			//{ "onPress", "function" },
-			//{ "focusable", "boolean" },
-			//{ "enableFocusRing", "boolean" },
-			//{ "tabIndex", "number" },
-			{ "source", "Map" },
-		} },
-		{ "bubblingEventTypes", JSValueObject{} },
-		{ "directEventTypes", JSValueObject{
-			{ "topMouseEnter", JSValueObject {
-				{ "registrationName", "onMouseEnter" },
-			}},
-			{ "topMouseLeave", JSValueObject {
-				{ "registrationName", "onMouseLeave" },
-			}},
-			{ "topClick", JSValueObject {
-				{ "registrationName", "onClick" },
-			}},
-			{ "topLoadStart", JSValueObject {
-				{ "registrationName", "onLoadStart" }
-			}},
-			{ "topLoadEnd", JSValueObject {
-				{ "registrationName", "onLoadEnd" }
-			}},
-			{ "topLoad", JSValueObject {
-				{ "registrationName", "onLoad" }
-			}},
-			{ "topError", JSValueObject {
-				{ "registrationName", "onError" }
-			}},
-	}
-}
-
-} 
-	};
-
-}
-
