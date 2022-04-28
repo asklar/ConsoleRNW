@@ -62,14 +62,6 @@ void RawTextViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<Shad
 void RawTextViewManager::UpdateLayout(ShadowNode* node, float left, float top, float width, float height) {
 }
 
-YGMeasureFunc RawTextViewManager::GetCustomMeasureFunction() {
-	return DefaultYogaSelfMeasureFunc;
-}
-
-YGMeasureFunc TextViewManager::GetCustomMeasureFunction() {
-	return DefaultYogaSelfMeasureFunc;
-}
-
 std::shared_ptr<ShadowNode> TextViewManager::Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props) {
 	return ViewViewManager::Create(reactTag, rootTag, rootHWnd, props);
 	//return std::make_shared<TextShadowNode>(nullptr, m_yogaConfig, this);
@@ -234,7 +226,7 @@ void RawTextShadowNode::PaintForeground(HDC dc) {
 		r.left = 0;
 		r.top = 0;
 
-		Gdiplus::RectF rc(0, 0, r.right, r.bottom);
+		Gdiplus::RectF rc(0, 0, static_cast<Gdiplus::REAL>(r.right), static_cast<Gdiplus::REAL>(r.bottom));
 
 		float scale = GetScaleFactor();
 		Gdiplus::StringFormat sf{};

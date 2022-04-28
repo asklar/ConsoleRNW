@@ -24,12 +24,8 @@ YGSize ImageShadowNode::Measure(float width,
 	return {};
 }
 
-YGMeasureFunc ImageViewManager::GetCustomMeasureFunction() {
-	return DefaultYogaSelfMeasureFunc;
-}
-
-
 void ImageViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) {
+	bool dirty = false;
 	auto sn = std::static_pointer_cast<ImageShadowNode>(node);
 	for (const auto& v : props) {
 		const auto& propName = v.first;
@@ -37,18 +33,17 @@ void ImageViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<Shadow
 
 		if (auto setter = ImageProperties::GetProperty(propName)) {
 			setter->setter(node.get(), value);
-			if (setter->dirtyLayout)
-				GetUIManager()->DirtyYogaNode(reactTag);
+			if (setter->dirtyLayout) dirty = true;
 		}
 		else {
 			if (auto setter = ViewProperties::GetProperty(propName)) {
 				setter->setter(node.get(), value);
-				if (setter->dirtyLayout) {
-					GetUIManager()->DirtyYogaNode(reactTag);
-				}
+				if (setter->dirtyLayout) dirty = true;
 			}
 		}
 	}
+	if (dirty) 
+		GetUIManager()->DirtyYogaNode(reactTag);
 }
 
 winrt::Microsoft::ReactNative::JSValueObject ImageViewManager::GetConstants() {

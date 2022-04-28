@@ -43,7 +43,7 @@ struct IWin32ViewManager {
             });
     }
 
-    virtual YGMeasureFunc GetCustomMeasureFunction() {
+    virtual YGMeasureFunc GetCustomMeasureFunction() const {
         return nullptr;
     }
 

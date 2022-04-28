@@ -55,9 +55,13 @@ void PaperUIManager::EnsureViewManager(const std::string& viewManagerName) {
 			{ "NativeButton", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ButtonViewManager(context, ycr)); }},
 			{ "RCTImageView", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ImageViewManager(context, ycr)); }},
 			{ "Image", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ImageViewManager(context, ycr)); }},
+			{ "RCTTextInput", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new TextInputViewManager(context, ycr)); }},
 		};
 		const auto& entry = std::find_if(std::begin(viewMgrFactory), std::end(viewMgrFactory), [&viewManagerName](const auto& i) { return i.name == viewManagerName; });
-		m_viewManagers[viewManagerName] = entry->make(m_context, m_yogaConfig);
+		if (entry != std::end(viewMgrFactory))
+		{
+			m_viewManagers[viewManagerName] = entry->make(m_context, m_yogaConfig);
+		}
 
 	}
 }
@@ -65,8 +69,14 @@ void PaperUIManager::EnsureViewManager(const std::string& viewManagerName) {
 winrt::Microsoft::ReactNative::JSValueObject PaperUIManager::getConstantsForViewManager(std::string viewManagerName) noexcept
 {
 	EnsureViewManager(viewManagerName);
-
-    return m_viewManagers[viewManagerName]->GetConstants();
+	if (m_viewManagers.contains(viewManagerName))
+	{
+		return m_viewManagers[viewManagerName]->GetConstants();
+	}
+	else
+	{
+		return {};
+	}
 }
 
 // Not part of the spec, but core polyfils this on the JS side.
@@ -174,6 +184,8 @@ void PaperUIManager::DoLayout() {
 	float actualWidth = static_cast<float>(rect.right - rect.left);
     float actualHeight = static_cast<float>(rect.bottom - rect.top);
 
+	actualWidth -= 24;//test
+
     // We must always run layout in LTR mode, which might seem unintuitive.
     // We will flip the root of the tree into RTL by forcing the root XAML node's FlowDirection to RightToLeft
     // which will inherit down the XAML tree, allowing all native controls to pick it up.
@@ -243,6 +255,7 @@ void PaperUIManager::createView(
             }
         }
         vm->UpdateProperties(reactTag, shadowNode, props);
+		StyleYogaNode(*shadowNode, shadowNode->yogaNode.get(), props);
 		Invalidate(shadowNode->window);
     });
 	

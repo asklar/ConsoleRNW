@@ -11,14 +11,14 @@ enum class ViewKind {
 	Image = 4,
 };
 
+template<typename TShadowNode = ShadowNode>
 struct ViewViewManager : IWin32ViewManager {
 
     ViewViewManager(winrt::Microsoft::ReactNative::ReactContext ctx, ViewKind kind, YGConfigRef yogaConfig);
 
     static LRESULT __stdcall ViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-
-    ~ViewViewManager();
+    virtual ~ViewViewManager();
 
     std::shared_ptr<ShadowNode> Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props);
 
@@ -28,24 +28,40 @@ struct ViewViewManager : IWin32ViewManager {
 
     void UpdateLayout(ShadowNode* node, float left, float top, float width, float height) override;
 
-	static LRESULT OnHitTest(ShadowNode* node);
-	static void OnEraseBackground(const HWND& hwnd, ShadowNode* node);
-	static void RaiseMouseLeave(ShadowNode* node, int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
-	static void RaiseMouseEnter(ShadowNode* node, int64_t& tag, const HWND& hwnd, const WPARAM& wParam, const LPARAM& lParam);
-	static void RaiseOnClick(ShadowNode* node, const int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
+	static LRESULT OnHitTest(TShadowNode* node);
+	static void OnEraseBackground(const HWND& hwnd, TShadowNode* node);
+	static void RaiseMouseLeave(TShadowNode* node, int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
+	static void RaiseMouseEnter(TShadowNode* node, int64_t& tag, const HWND& hwnd, const WPARAM& wParam, const LPARAM& lParam);
+	static void RaiseOnClick(TShadowNode* node, const int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
+	
+	YGMeasureFunc GetCustomMeasureFunction() const override
+	{
+		return TShadowNode::IsCustomMeasure ? DefaultYogaSelfMeasureFunc : nullptr;
+	}
+	virtual const wchar_t* GetWindowClassName() const
+	{
+		return TShadowNode::WindowClassName;
+	}
+
 private:
     ViewKind m_kind;
-    const wchar_t* GetWindowClassName() const;
-
+	static YGSize DefaultYogaSelfMeasureFunc(
+		YGNodeRef node,
+		float width,
+		YGMeasureMode widthMode,
+		float height,
+		YGMeasureMode heightMode)
+	{
+		auto shadowNode = reinterpret_cast<ShadowNode*>(YGNodeGetContext(node));
+		return shadowNode->Measure(width, widthMode, height, heightMode);
+	}
 
 };
 
-struct TextViewManager : ViewViewManager {
+struct TextViewManager : ViewViewManager<TextShadowNode> {
     TextViewManager(winrt::Microsoft::ReactNative::ReactContext ctx, YGConfigRef ycr) : ViewViewManager(ctx, ViewKind::Text, ycr) {}
-    YGMeasureFunc GetCustomMeasureFunction() override;
-    std::shared_ptr<ShadowNode> Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props);
+    std::shared_ptr<ShadowNode> Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
     void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
-//    winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
     void UpdateLayout(ShadowNode* node, float left, float top, float width, float height) override;
 };
 
@@ -55,28 +71,30 @@ struct RawTextViewManager : IWin32ViewManager {
     void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
     winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
     void UpdateLayout(ShadowNode* node, float left, float top, float width, float height) override;
-    YGMeasureFunc GetCustomMeasureFunction() override;
 };
 
-struct ButtonViewManager : ViewViewManager {
+struct TextInputViewManager : ViewViewManager<TextInputShadowNode>
+{
+	TextInputViewManager(winrt::Microsoft::ReactNative::ReactContext ctx, YGConfigRef ycr) : ViewViewManager(ctx, ViewKind::CommonControl, ycr) {}
+	void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
+};
+
+struct ButtonViewManager : ViewViewManager<ButtonShadowNode> {
 	ButtonViewManager(winrt::Microsoft::ReactNative::ReactContext ctx, YGConfigRef ycr) : ViewViewManager(ctx, ViewKind::CommonControl, ycr) {}
 	std::shared_ptr<ShadowNode> Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props);
 	void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
-	winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
-	YGMeasureFunc GetCustomMeasureFunction();
 private:
 	static void SetText(ShadowNode* node, const winrt::Microsoft::ReactNative::JSValue& v);
 	static LRESULT WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubClass, DWORD_PTR dwRefData);
 	friend struct ButtonProperties;
 };
 
-struct ImageViewManager : ViewViewManager {
+struct ImageViewManager : ViewViewManager<ImageShadowNode> {
 	ImageViewManager(winrt::Microsoft::ReactNative::ReactContext ctx, YGConfigRef ycr) : ViewViewManager(ctx, ViewKind::Image, ycr) {}
 	//std::shared_ptr<ShadowNode> Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props);
 	void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
 	winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
 	//void UpdateLayout(ShadowNode* node, int left, int top, int width, int height) override;
-	YGMeasureFunc GetCustomMeasureFunction() override;
 	static void SetSource(ShadowNode* node, const winrt::Microsoft::ReactNative::JSValue& v);
 };
 

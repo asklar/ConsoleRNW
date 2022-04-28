@@ -5,25 +5,12 @@
 
 using JSValueObject = winrt::Microsoft::ReactNative::JSValueObject;
 
-const wchar_t* ViewViewManager::GetWindowClassName() const {
-	switch (m_kind) {
-	case ViewKind::View:
-		return L"RCTView";
-	case ViewKind::RawText:
-		return L"RCTRawText";
-	case ViewKind::Text:
-		return L"RCTText";
-	case ViewKind::Image:
-		return L"RCTImage";
-	default:
-		return nullptr;
-	}
-}
 
 
-
-ViewViewManager::ViewViewManager(winrt::Microsoft::ReactNative::ReactContext ctx, ViewKind kind, YGConfigRef yogaConfig) : IWin32ViewManager(ctx, yogaConfig), m_kind(kind) {
-	if (auto clsName = GetWindowClassName()) {
+template<typename TShadowNode>
+ViewViewManager<TShadowNode>::ViewViewManager(winrt::Microsoft::ReactNative::ReactContext ctx, ViewKind kind, YGConfigRef yogaConfig) : IWin32ViewManager(ctx, yogaConfig), m_kind(kind) {
+	if (auto clsName = GetWindowClassName(); TShadowNode::IsCustomWindowClass && clsName)
+	{
 		WNDCLASSEX wcex{};
 		wcex.cbSize = sizeof(wcex);
 		wcex.style = CS_HREDRAW | CS_VREDRAW;
@@ -62,7 +49,8 @@ static auto MouseEventArgs(int64_t tag, WPARAM wParam, LPARAM lParam) {
 	};
 }
 
-void ViewViewManager::UpdateLayout(ShadowNode* node, float left, float top, float width, float height) {
+template<typename TShadowNode>
+void ViewViewManager<TShadowNode>::UpdateLayout(ShadowNode* node, float left, float top, float width, float height) {
 	SetWindowPos(node->window, nullptr, std::lround(left), std::lround(top), std::lround(width), std::lround(height), SWP_NOZORDER);
 	if (m_kind == ViewKind::Text) {
 		for (const auto& child_weak : node->m_children) {
@@ -73,12 +61,16 @@ void ViewViewManager::UpdateLayout(ShadowNode* node, float left, float top, floa
 	}
 }
 
-
-LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-	auto node = GetShadowNode(hwnd);
+template<typename TShadowNode>
+LRESULT __stdcall ViewViewManager<TShadowNode>::ViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	auto node = static_cast<TShadowNode*>(GetShadowNode(hwnd));
 	auto tag = IWin32ViewManager::GetTag(hwnd);
 	auto vm = node ? node->m_vm : nullptr;
-
+	if (node)
+	{
+		auto vvm = static_cast<ViewViewManager<TShadowNode>*>(node->m_vm);
+		auto x = 0;
+	}
 
 	switch (msg) {
 	case WM_NCHITTEST: {
@@ -115,7 +107,8 @@ LRESULT __stdcall ViewViewManager::ViewWndProc(HWND hwnd, UINT msg, WPARAM wPara
 	return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-LRESULT ViewViewManager::OnHitTest(ShadowNode* node)
+template<typename TShadowNode>
+LRESULT ViewViewManager<TShadowNode>::OnHitTest(TShadowNode* node)
 {
 	if (!node->GetValueOrDefault<ShadowNode::IsMouseOverProperty>() && (!node->WantsMouseMove() || !node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>())) {
 		return HTTRANSPARENT;
@@ -123,7 +116,8 @@ LRESULT ViewViewManager::OnHitTest(ShadowNode* node)
 	return HTCLIENT;
 }
 
-void ViewViewManager::OnEraseBackground(const HWND& hwnd, ShadowNode* node)
+template<typename TShadowNode>
+void ViewViewManager<TShadowNode>::OnEraseBackground(const HWND& hwnd, TShadowNode* node)
 {
 	PAINTSTRUCT ps{};
 	auto dc = BeginPaint(hwnd, &ps);
@@ -147,14 +141,16 @@ void ViewViewManager::OnEraseBackground(const HWND& hwnd, ShadowNode* node)
 	EndPaint(hwnd, &ps);
 }
 
-void ViewViewManager::RaiseMouseLeave(ShadowNode* node, int64_t& tag, const WPARAM& wParam, const LPARAM& lParam)
+template<typename TShadowNode>
+void ViewViewManager<TShadowNode>::RaiseMouseLeave(TShadowNode* node, int64_t& tag, const WPARAM& wParam, const LPARAM& lParam)
 {
 	node->SetValue<ShadowNode::IsMouseOverProperty>(false);
 	OutputDebugStringA(fmt::format("MouseLeave tag={} vmKind={}\n", tag, typeid(*node->m_vm).name()).c_str());
 	node->m_vm->EmitEvent("topMouseLeave", tag, MouseEventArgs(tag, wParam, lParam));
 }
 
-void ViewViewManager::RaiseMouseEnter(ShadowNode* node, int64_t& tag, const HWND& hwnd, const WPARAM& wParam, const LPARAM& lParam)
+template<typename TShadowNode>
+void ViewViewManager<TShadowNode>::RaiseMouseEnter(TShadowNode* node, int64_t& tag, const HWND& hwnd, const WPARAM& wParam, const LPARAM& lParam)
 {
 	if (!node->GetValueOrDefault<ShadowNode::IsMouseOverProperty>() && node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>()) {
 		node->SetValue<ShadowNode::IsMouseOverProperty>(true);
@@ -168,51 +164,39 @@ void ViewViewManager::RaiseMouseEnter(ShadowNode* node, int64_t& tag, const HWND
 	}
 }
 
-void ViewViewManager::RaiseOnClick(ShadowNode* node, const int64_t& tag, const WPARAM& wParam, const LPARAM& lParam)
+template<typename TShadowNode>
+void ViewViewManager<TShadowNode>::RaiseOnClick(TShadowNode* node, const int64_t& tag, const WPARAM& wParam, const LPARAM& lParam)
 {
 	if (node->GetValueOrParent<ShadowNode::OnPressProperty>()) {
 		node->m_vm->EmitEvent("topClick", tag, MouseEventArgs(tag, wParam, lParam));
 	}
 }
 
-ViewViewManager::~ViewViewManager() {
-	UnregisterClassW(GetWindowClassName(), nullptr);
+template<typename TShadowNode>
+ViewViewManager<TShadowNode>::~ViewViewManager() {
+	if (TShadowNode::IsCustomWindowClass)
+	{
+		UnregisterClassW(GetWindowClassName(), nullptr);
+	}
 }
 
-std::shared_ptr<ShadowNode> ViewViewManager::Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props) {
+template<typename TShadowNode>
+std::shared_ptr<ShadowNode> ViewViewManager<TShadowNode>::Create(int64_t reactTag, int64_t rootTag, HWND rootHWnd, const winrt::Microsoft::ReactNative::JSValueObject& props) {
 	auto tag = fmt::format(L"{}: {}", GetWindowClassName(), reactTag);
-	auto hwnd = CreateWindow(GetWindowClassName(), tag.c_str(), WS_CHILD | WS_VISIBLE,
+	auto hwnd = CreateWindow(GetWindowClassName(), nullptr /*tag.c_str()*/, TShadowNode::CreationStyle,
 		0, 0, 0, 0,
 		rootHWnd, nullptr, nullptr, nullptr);
 
 	OutputDebugStringW(fmt::format(L"Create {} {}\n", reactTag, GetWindowClassName()).c_str());
 
 	IWin32ViewManager::SetTag(hwnd, reactTag);
-	switch (m_kind)
-	{
-	case ViewKind::View:
-		return std::make_shared<ShadowNode>(hwnd, m_yogaConfig, this);
-		break;
-	//case ViewKind::RawText:
-	//	return std::make_shared<RawTextShadowNode>(hwnd, m_yogaConfig, this); 
-	//	break;
-	case ViewKind::Text:
-		return std::make_shared<TextShadowNode>(hwnd, m_yogaConfig, this);
-		break;
-	case ViewKind::Image:
-		return std::make_shared <ImageShadowNode>(hwnd, m_yogaConfig, this);
-		break;
-	default:
-		throw std::invalid_argument("View Manager kind");
-		break;
-	}
-	
+	return std::make_shared<TShadowNode>(hwnd, m_yogaConfig, this);
 }
 
 
 
-
-void ViewViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) {
+template<typename TShadowNode>
+void ViewViewManager<TShadowNode>::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) {
 	bool dirty = false;
 	for (const auto& v : props) {
 		const auto& propName = v.first;
@@ -232,42 +216,30 @@ void ViewViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowN
 		GetUIManager()->DirtyYogaNode(reactTag);
 	}
 }
-
-winrt::Microsoft::ReactNative::JSValueObject ViewViewManager::GetConstants() {
+template<typename TShadowNode>
+winrt::Microsoft::ReactNative::JSValueObject ViewViewManager<TShadowNode>::GetConstants()
+{
 	using namespace winrt::Microsoft::ReactNative;
 	JSValueObject view;
-	if (m_kind == ViewKind::View) {
-		view = {
-			{
-				{ "Constants", JSValueObject{} },
-				{ "Commands", JSValueObject{} },
-				{ "NativeProps", JSValueObject{
-					{ "onLayout", "function" },
-					{ "pointerEvents", "string" },
-					{ "onClick", "function" },
-					{ "onMouseEnter", "function" },
-					{ "onMouseLeave", "function" },
-					{ "onPress", "function" },
-					{ "focusable", "boolean" },
-					{ "enableFocusRing", "boolean" },
-					{ "tabIndex", "number" },
-					//{ "test123", "number"},
-				} },
-				{ "bubblingEventTypes", JSValueObject{} },
-				{ "directEventTypes", JSValueObject{
-					{ "topMouseEnter", JSValueObject {
-						{ "registrationName", "onMouseEnter" },
-					}},
-					{ "topMouseLeave", JSValueObject {
-						{ "registrationName", "onMouseLeave" },
-					}},
-					{ "topClick", JSValueObject {
-						{ "registrationName", "onClick" },
-					}},
-				} },
-			}
-		};
-	}
+	view = {
+		{
+			{ "Constants", JSValueObject{} },
+			{ "Commands", JSValueObject{} },
+			{ "NativeProps", TShadowNode::GetNativeProps() },
+			{ "bubblingEventTypes", JSValueObject{} },
+			{ "directEventTypes", JSValueObject{
+				{ "topMouseEnter", JSValueObject {
+					{ "registrationName", "onMouseEnter" },
+				}},
+				{ "topMouseLeave", JSValueObject {
+					{ "registrationName", "onMouseLeave" },
+				}},
+				{ "topClick", JSValueObject {
+					{ "registrationName", "onClick" },
+				}},
+			} },
+		}
+	};
 
 	return view;
 }
@@ -340,7 +312,7 @@ void ShadowNode::PaintForeground(HDC dc) {
 
 
 LRESULT ButtonViewManager::WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubClass, DWORD_PTR dwRefData) {
-	auto node = GetShadowNode(hwnd);
+	auto node = static_cast<ButtonShadowNode*>(GetShadowNode(hwnd));
 	auto tag = IWin32ViewManager::GetTag(hwnd);
 	auto vm = node ? node->m_vm : nullptr;
 
@@ -393,42 +365,6 @@ void ButtonViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<Shado
 	if (dirty) GetUIManager()->DirtyYogaNode(reactTag);
 }
 
-winrt::Microsoft::ReactNative::JSValueObject ButtonViewManager::GetConstants()  {
-	auto view = JSValueObject {
-		{
-			{ "Constants", JSValueObject{} },
-			{ "Commands", JSValueObject{} },
-			{ "NativeProps", JSValueObject{
-				{ "onLayout", "function" },
-				{ "pointerEvents", "string" },
-				{ "onClick", "function" },
-				{ "onMouseEnter", "function" },
-				{ "onMouseLeave", "function" },
-				{ "focusable", "boolean" },
-				{ "enableFocusRing", "boolean" },
-				{ "tabIndex", "number" },
-				{ "title", "string" },
-				{ "fontFamily", "string" },
-				{ "fontSize", "number" },
-			} },
-			{ "bubblingEventTypes", JSValueObject{} },
-			{ "directEventTypes", JSValueObject{
-				{ "topMouseEnter", JSValueObject {
-					{ "registrationName", "onMouseEnter" },
-				}},
-				{ "topMouseLeave", JSValueObject {
-					{ "registrationName", "onMouseLeave" },
-				}},
-				{ "topClick", JSValueObject {
-					{ "registrationName", "onClick" }
-				}}
-			} },
-		}
-	};
-
-	return view;
-}
-
 
 
 std::shared_ptr<PaperUIManager> IWin32ViewManager::GetUIManager() const {
@@ -459,23 +395,55 @@ void ShadowNode::PrintNode(int level) const {
 }
 #endif
 
-YGSize DefaultYogaSelfMeasureFunc(
-	YGNodeRef node,
-	float width,
-	YGMeasureMode widthMode,
-	float height,
-	YGMeasureMode heightMode) {
-	auto shadowNode = reinterpret_cast<ShadowNode*>(YGNodeGetContext(node));
-	return shadowNode->Measure(width, widthMode, height, heightMode);
-}
-
-
-YGMeasureFunc ButtonViewManager::GetCustomMeasureFunction() {
-	return DefaultYogaSelfMeasureFunc;
-}
 
 void ButtonShadowNode::CreateFont() {
 	auto lf = GetLogFont();
 	auto hfont = CreateFontIndirect(&lf);
 	SendMessage(window, WM_SETFONT, reinterpret_cast<WPARAM>(hfont), TRUE);
 }
+
+struct TextInputProperties : ViewManagerProperties<TextInputProperties>
+{
+	constexpr static setter_entry_t setters[] = {
+		{
+			"value", 
+			[](ShadowNode* n, const winrt::Microsoft::ReactNative::JSValue& v)
+			{
+				auto ws = winrt::to_hstring(v.AsString());
+				n->SetValue<ShadowNode::TextProperty>(ws.c_str()); 
+				SendMessage(n->window, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(ws.c_str()));
+			},
+			true
+		},
+	};
+};
+
+
+void TextInputViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props)
+{
+	auto dirty = false;
+	auto sn = std::static_pointer_cast<TextInputShadowNode>(node);
+	for (const auto& v : props)
+	{
+		const auto& propName = v.first;
+		const auto& value = v.second;
+
+		if (auto setter = TextInputProperties::GetProperty(propName))
+		{
+			setter->setter(node.get(), value);
+			if (setter->dirtyLayout) dirty = true;
+		}
+	}
+
+	ViewViewManager::UpdateProperties(reactTag, node, props);
+
+	if (dirty)
+		GetUIManager()->DirtyYogaNode(reactTag);
+}
+
+// Explicit template instantiations
+template struct ViewViewManager<ShadowNode>;
+template struct ViewViewManager<TextShadowNode>;
+template struct ViewViewManager<ButtonShadowNode>;
+template struct ViewViewManager<ImageShadowNode>;
+template struct ViewViewManager<TextInputShadowNode>;

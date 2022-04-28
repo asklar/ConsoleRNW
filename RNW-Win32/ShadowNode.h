@@ -119,6 +119,24 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparseProperty
     LOGFONT GetLogFont() const;
     virtual void CreateFont();
 
+    static constexpr const wchar_t* WindowClassName = L"RCTView";
+    static constexpr bool IsCustomWindowClass = true;
+    static constexpr bool IsCustomMeasure = false;
+    static constexpr DWORD CreationStyle = WS_CHILD | WS_VISIBLE;
+    static winrt::Microsoft::ReactNative::JSValueObject GetNativeProps()
+    {
+        return winrt::Microsoft::ReactNative::JSValueObject{
+                    { "onLayout", "function" },
+                    { "pointerEvents", "string" },
+                    { "onClick", "function" },
+                    { "onMouseEnter", "function" },
+                    { "onMouseLeave", "function" },
+                    { "onPress", "function" },
+                    { "focusable", "boolean" },
+                    { "enableFocusRing", "boolean" },
+                    { "tabIndex", "number" },
+        };
+    }
 protected:
     virtual void PaintBackground(HDC dc);
     virtual void PaintForeground(HDC dc);
@@ -134,6 +152,8 @@ struct ImageShadowNode : ShadowNode {
 
     using SourceProperty = SparseProperty<SparsePropertyIndex::Source>;
 
+    static constexpr const wchar_t* WindowClassName = L"RCTImage";
+    static constexpr bool IsCustomMeasure = true;
 private:
     std::unique_ptr<Gdiplus::Bitmap> m_bitmap;
     friend struct ImageViewManager;
@@ -148,6 +168,8 @@ struct TextShadowNode : ShadowNode {
         YGMeasureMode heightMode) override;
     YGSize MeasureText() const override;
     bool WantsMouseMove() override { return false; }
+    static constexpr const wchar_t* WindowClassName = L"RCTText";
+    static constexpr bool IsCustomMeasure = true;
 };
 struct RawTextShadowNode : ShadowNode {
     RawTextShadowNode(HWND w, YGConfigRef config, IWin32ViewManager* vm) : ShadowNode(w, config, vm){}
@@ -156,16 +178,72 @@ struct RawTextShadowNode : ShadowNode {
     std::shared_ptr<TextShadowNode> Parent() const {
         return std::static_pointer_cast<TextShadowNode>(m_parent.lock());
     }
+    static constexpr const wchar_t* WindowClassName = L"RCTRawText";
+    static constexpr bool IsCustomMeasure = true;
 };
 
-struct ButtonShadowNode : ShadowNode {
+struct ButtonShadowNode : ShadowNode
+{
     ButtonShadowNode(HWND w, YGConfigRef config, IWin32ViewManager* vm) : ShadowNode(w, config, vm) {}
     YGSize Measure(float width,
         YGMeasureMode widthMode,
         float height,
-        YGMeasureMode heightMode) override {
-
+        YGMeasureMode heightMode) override
+    {
         return MeasureText() + YGSize{ 14, 14 } * GetScaleFactor();
     }
     void CreateFont() override;
+    static constexpr const wchar_t* WindowClassName = L"BUTTON";
+    static constexpr bool IsCustomWindowClass = false;
+    static constexpr bool IsCustomMeasure = true;
+    static winrt::Microsoft::ReactNative::JSValueObject GetNativeProps()
+    {
+        return winrt::Microsoft::ReactNative::JSValueObject{
+            { "onLayout", "function" },
+            { "pointerEvents", "string" },
+            { "onClick", "function" },
+            { "onMouseEnter", "function" },
+            { "onMouseLeave", "function" },
+            { "focusable", "boolean" },
+            { "enableFocusRing", "boolean" },
+            { "tabIndex", "number" },
+            { "title", "string" },
+            { "fontFamily", "string" },
+            { "fontSize", "number" },
+        };
+    }
 };
+
+struct TextInputShadowNode : ShadowNode
+{
+    TextInputShadowNode(HWND w, YGConfigRef config, IWin32ViewManager* vm) : ShadowNode(w, config, vm) {}
+    YGSize Measure(float width,
+        YGMeasureMode widthMode,
+        float height,
+        YGMeasureMode heightMode) override
+    {
+        return YGSize{ 150, 24 } * GetScaleFactor();// MeasureText() + YGSize{ 14, 14 } *GetScaleFactor();
+    }
+    static constexpr const wchar_t* WindowClassName = WC_EDITW;
+    static constexpr bool IsCustomWindowClass = false;
+    static constexpr bool IsCustomMeasure = true;
+    static constexpr DWORD CreationStyle = ShadowNode::CreationStyle | WS_TABSTOP | WS_BORDER;
+    static winrt::Microsoft::ReactNative::JSValueObject GetNativeProps()
+    {
+        return winrt::Microsoft::ReactNative::JSValueObject{
+            { "onLayout", "function" },
+            { "pointerEvents", "string" },
+            { "onClick", "function" },
+            { "onMouseEnter", "function" },
+            { "onMouseLeave", "function" },
+            { "focusable", "boolean" },
+            { "enableFocusRing", "boolean" },
+            { "tabIndex", "number" },
+            { "value", "string" },
+            { "fontFamily", "string" },
+            { "fontSize", "number" },
+        };
+    }
+
+};
+
