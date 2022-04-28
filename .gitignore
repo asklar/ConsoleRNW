@@ -388,3 +388,5 @@ FodyWeavers.xsd
 *.sln.iml
 *.i
 /packages_old
+*.bundle
+*.diagsession
