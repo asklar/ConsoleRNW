@@ -389,3 +389,4 @@ FodyWeavers.xsd
 *.i
 /packages_old
 *.bundle
+*.diagsession
