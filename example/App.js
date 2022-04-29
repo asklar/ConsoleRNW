@@ -18,7 +18,7 @@ const App = () => {
         <>
             <Text style={{ fontFamily: "Segoe UI", fontSize: 11, 
             marginLeft: 24, marginBottom: 12, marginRight: 22, textAlign: 'right'}}>Hello world!</Text>
-            <Image source={{ uri: "react.png" }} style={{width: 200, height: 160}}/>
+            <Image source={require('./react.png')}/>
             <TextInput style={{ margin: 20}} onChangeText={(e) => { alert(JSON.stringify(e.nativeEvent)); }} value={text} /> 
             <View style={{ backgroundColor: color, flexDirection: 'row', margin: 8 }} onMouseEnter={() => { setColor('yellow'); }} onMouseLeave={() => { setColor('red'); }}>
                 <NativeButton title="Click me" style={{margin: 8}}

@@ -171,6 +171,7 @@
     <ClInclude Include="PaperUIManager.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Properties.h" />
+    <ClInclude Include="ReactImage.h" />
     <ClInclude Include="ShadowNode.h" />
     <ClInclude Include="TextViewManager.h" />
     <ClInclude Include="ViewViewManager.h" />
@@ -184,6 +185,7 @@
   <ItemGroup>
     <ClCompile Include="ImageViewManager.cpp" />
     <ClCompile Include="PaperUIManager.cpp" />
+    <ClCompile Include="ReactImage.cpp" />
     <ClCompile Include="RNW-Win32.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
@@ -198,9 +200,6 @@
     <ResourceCompile Include="RNW-Win32.rc" />
   </ItemGroup>
   <ItemGroup>
-    <CopyFileToFolders Include="react.png">
-      <DeploymentContent>true</DeploymentContent>
-    </CopyFileToFolders>
     <Image Include="RNW-Win32.ico" />
     <Image Include="small.ico" />
   </ItemGroup>

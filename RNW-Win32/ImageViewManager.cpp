@@ -2,6 +2,9 @@
 #include "PaperUIManager.h"
 #include "ViewViewManager.h"
 #include <filesystem>
+#include "ReactImage.h"
+#include <Utils/PropertyHandlerUtils.h>
+#include <shcore.h>
 using namespace winrt::Microsoft::ReactNative;
 
 void ImageShadowNode::PaintForeground(HDC dc) {
@@ -24,6 +27,7 @@ YGSize ImageShadowNode::Measure(float width,
 	return {};
 }
 
+
 void ImageViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) {
 	bool dirty = false;
 	auto sn = std::static_pointer_cast<ImageShadowNode>(node);
@@ -31,9 +35,9 @@ void ImageViewManager::UpdateProperties(int64_t reactTag, std::shared_ptr<Shadow
 		const auto& propName = v.first;
 		const auto& value = v.second;
 
-		if (auto setter = ImageProperties::GetProperty(propName)) {
-			setter->setter(node.get(), value);
-			if (setter->dirtyLayout) dirty = true;
+		if (propName == "source")
+		{
+			SetSource(node.get(), value);
 		}
 		else {
 			if (auto setter = ViewProperties::GetProperty(propName)) {
@@ -100,37 +104,62 @@ std::filesystem::path GetCurrentProcessPath() {
 	return path;
 }
 
-void ImageViewManager::SetSource(ShadowNode* node, const winrt::Microsoft::ReactNative::JSValue& v) {
-	ImageProperties::Set<ImageShadowNode::SourceProperty>(node, v);
+winrt::fire_and_forget ImageViewManager::SetSource(ShadowNode* node, const winrt::Microsoft::ReactNative::JSValue& v)
+{
+	ViewProperties::Set<ImageShadowNode::SourceProperty>(node, v);
 
 	auto sn = static_cast<ImageShadowNode*>(node);
-	
-	if (v.Type() == JSValueType::String) {
+
+	if (v.Type() == JSValueType::String)
+	{
 		auto path = winrt::to_hstring(v.AsString());
 		sn->m_bitmap = std::make_unique<Gdiplus::Bitmap>(path.c_str());
 	}
-	else if (auto arr = v.TryGetArray(); arr && arr->size() > 0) {
-		const auto& first = (*arr)[0];
-		if (auto source = first.TryGetObject()) {
-			if (source->contains("uri")) {
-				const auto& uri = source->at("uri");
-				if (auto uriString = uri.TryGetString()) {
-					auto fsPath = std::filesystem::path(*uriString);
-					if (fsPath.is_relative()) {
-						auto absPath = GetCurrentProcessPath().parent_path() / fsPath;
-						if (std::filesystem::exists(absPath)) {
-							fsPath = absPath;
-						}
-						else {
-							sn->m_bitmap = std::make_unique<Gdiplus::Bitmap>(nullptr, fsPath.wstring().c_str());
-						}
-					}
-					/*auto cwd = std::filesystem::current_path();
-					auto absPath = std::filesystem::absolute(fsPath);*/
-					auto path = fsPath.wstring();
-					sn->m_bitmap = std::make_unique<Gdiplus::Bitmap>(path.c_str());
+	else if (auto arr = v.TryGetArray(); arr && arr->size() > 0)
+	{
+		auto sources{ json_type_traits<std::vector<Microsoft::ReactNative::ReactImageSource>>::parseJson(v) };
+		sources[0].bundleRootPath = winrt::to_string(m_context.Handle().SettingsSnapshot().BundleRootPath());
+
+		if (sources[0].packagerAsset && sources[0].uri.find("file://") == 0)
+		{
+			sources[0].uri.replace(0, 7, sources[0].bundleRootPath);
+		}
+
+		// EmitImageEvent(grid, "topLoadStart", sources[0]); // TODO
+
+
+		const auto& uriString = sources[0].uri;
+		if (uriString.starts_with("http://") || uriString.starts_with("https://"))
+		{
+			sources[0].Calculate();
+			auto imgStreamOperation = Microsoft::ReactNative::GetImageStreamAsync(sources[0]);
+			auto imgStream = co_await imgStreamOperation;
+			winrt::com_ptr<IStream> istream;
+			auto unk = imgStream.as<::IUnknown>();
+			CreateStreamOverRandomAccessStream(unk.get(), IID_PPV_ARGS(&istream));
+			
+			sn->m_bitmap = std::make_unique<Gdiplus::Bitmap>(istream.get());
+		}
+		else
+		{
+			auto fsPath = std::filesystem::path(uriString);
+			if (fsPath.is_relative())
+			{
+				auto absPath = GetCurrentProcessPath().parent_path() / fsPath;
+				if (std::filesystem::exists(absPath))
+				{
+					fsPath = absPath;
+				}
+				else
+				{
+					sn->m_bitmap = std::make_unique<Gdiplus::Bitmap>(nullptr, fsPath.wstring().c_str());
 				}
 			}
+			/*auto cwd = std::filesystem::current_path();
+			auto absPath = std::filesystem::absolute(fsPath);*/
+			auto path = fsPath.wstring();
+			sn->m_bitmap = std::make_unique<Gdiplus::Bitmap>(path.c_str());
 		}
 	}
+	co_return;
 }

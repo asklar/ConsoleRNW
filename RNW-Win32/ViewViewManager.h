@@ -95,7 +95,7 @@ struct ImageViewManager : ViewViewManager<ImageShadowNode> {
 	void UpdateProperties(int64_t reactTag, std::shared_ptr<ShadowNode> node, const winrt::Microsoft::ReactNative::JSValueObject& props) override;
 	winrt::Microsoft::ReactNative::JSValueObject GetConstants() override;
 	//void UpdateLayout(ShadowNode* node, int left, int top, int width, int height) override;
-	static void SetSource(ShadowNode* node, const winrt::Microsoft::ReactNative::JSValue& v);
+	winrt::fire_and_forget SetSource(ShadowNode* node, const winrt::Microsoft::ReactNative::JSValue& v);
 };
 
 template<typename TProperties>
@@ -226,11 +226,6 @@ struct ViewProperties : ViewManagerProperties<ViewProperties> {
 	};
 };
 
-struct ImageProperties : ViewManagerProperties<ImageProperties> {
-	constexpr static setter_entry_t setters[] = {
-		{ "source", ImageViewManager::SetSource, true },
-	};
-};
 
 YGSize DefaultYogaSelfMeasureFunc(
 	YGNodeRef node,
