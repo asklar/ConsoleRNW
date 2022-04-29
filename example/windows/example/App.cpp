@@ -26,11 +26,9 @@ App::App() noexcept
     InstanceSettings().UseFastRefresh(false);
 #else
     JavaScriptBundleFile(L"index");
-    //InstanceSettings().UseWebDebugger(true);
-    InstanceSettings().UseDirectDebugger(true);
+    InstanceSettings().UseWebDebugger(true);
     InstanceSettings().UseFastRefresh(true);
 #endif
-    InstanceSettings().JSIEngineOverride(Microsoft::ReactNative::JSIEngine::Hermes);
 
 #if _DEBUG
     InstanceSettings().UseDeveloperSupport(true);
