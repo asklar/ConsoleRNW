@@ -190,7 +190,7 @@ struct ButtonShadowNode : ShadowNode
         float height,
         YGMeasureMode heightMode) override
     {
-        return MeasureText() + YGSize{ 14, 14 } * GetScaleFactor();
+        return MeasureText() + YGSize{ 4, 4 } * GetScaleFactor();
     }
     void CreateFont() override;
     static constexpr const wchar_t* WindowClassName = L"BUTTON";

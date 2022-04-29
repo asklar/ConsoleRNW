@@ -207,12 +207,5 @@ private:
     std::unordered_map<std::string, std::unique_ptr<IWin32ViewManager>> m_viewManagers{};
     void EnsureViewManager(const std::string& viewManagerName);
 
-    void Invalidate(HWND hwnd) const {
-        // some properties can require us to redraw our parent, e.g. changing borderRadius 
-        // to a higher value (sharper curves) in fast refresh would leave a sliver of the border painted the old color, 
-        // since we don't erase the background. So, redraw the parent.
-        
-        RedrawWindow(TagToHWND(m_rootTag), nullptr, nullptr, RDW_ERASE | RDW_INVALIDATE | RDW_ALLCHILDREN);
-        //RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE);
-    }
+    void Invalidate(HWND hwnd) const;
 };
