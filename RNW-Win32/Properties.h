@@ -13,10 +13,18 @@ enum class TextAlign {
     Center = TA_CENTER,
 };
 
-inline constexpr bool operator&(TextAlign a, TextAlign b) {
-    using u_t = std::underlying_type_t<TextAlign>;
+template<typename TFlagEnum>
+inline constexpr bool operator&(TFlagEnum a, TFlagEnum b) {
+    using u_t = std::underlying_type_t<TFlagEnum>;
     if (static_cast<u_t>(b) == 0) return static_cast<u_t>(a) == 0;
     return (static_cast<u_t>(a) & static_cast<u_t>(b)) == static_cast<u_t>(b);
+}
+
+template<typename TFlagEnum>
+inline constexpr TFlagEnum operator|(TFlagEnum a, TFlagEnum b)
+{
+    using u_t = std::underlying_type_t<TFlagEnum>;
+    return static_cast<TFlagEnum>(static_cast<u_t>(a) | static_cast<u_t>(b));
 }
 
 template<typename TPropertyEnum>

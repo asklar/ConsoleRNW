@@ -2,7 +2,7 @@
 #include "ViewViewManager.h"
 #include "IWin32ViewManager.h"
 #include "PaperUIManager.h"
-
+#include "ScrollViewManager.h"
 using JSValueObject = winrt::Microsoft::ReactNative::JSValueObject;
 
 
@@ -447,3 +447,4 @@ template struct ViewViewManager<TextShadowNode>;
 template struct ViewViewManager<ButtonShadowNode>;
 template struct ViewViewManager<ImageShadowNode>;
 template struct ViewViewManager<TextInputShadowNode>;
+template struct ViewViewManager<ScrollViewShadowNode>;

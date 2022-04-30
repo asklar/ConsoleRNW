@@ -122,7 +122,10 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparseProperty
     static constexpr const wchar_t* WindowClassName = L"RCTView";
     static constexpr bool IsCustomWindowClass = true;
     static constexpr bool IsCustomMeasure = false;
+    
     static constexpr DWORD CreationStyle = WS_CHILD | WS_VISIBLE;
+
+
     static winrt::Microsoft::ReactNative::JSValueObject GetNativeProps()
     {
         return winrt::Microsoft::ReactNative::JSValueObject{

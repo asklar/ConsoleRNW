@@ -66,6 +66,9 @@
     <ClInclude Include="ReactImage.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ScrollViewManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RNW-Win32.cpp">
@@ -98,6 +101,9 @@
     <ClCompile Include="ReactImage.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ScrollViewManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="RNW-Win32.rc">
@@ -119,5 +125,8 @@
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="app.manifest" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="Visualizer.natvis" />
   </ItemGroup>
 </Project>

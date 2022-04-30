@@ -2,6 +2,7 @@
 #include "PaperUIManager.h"
 #include "ViewViewManager.h"
 #include "YogaHelpers.h"
+#include "ScrollViewManager.h"
 
 void AssertTag(bool, DWORD) {}
 using namespace winrt::Microsoft::ReactNative;
@@ -56,6 +57,8 @@ void PaperUIManager::EnsureViewManager(const std::string& viewManagerName) {
 			{ "RCTImageView", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ImageViewManager(context, ycr)); }},
 			{ "Image", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ImageViewManager(context, ycr)); }},
 			{ "RCTTextInput", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new TextInputViewManager(context, ycr)); }},
+			{ "RCTScrollContentView", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ScrollViewManager(context, ycr)); }},
+			{ "RCTScrollView", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ScrollViewManager(context, ycr)); }},
 		};
 		const auto& entry = std::find_if(std::begin(viewMgrFactory), std::end(viewMgrFactory), [&viewManagerName](const auto& i) { return i.name == viewManagerName; });
 		if (entry != std::end(viewMgrFactory))
@@ -236,6 +239,7 @@ void PaperUIManager::createView(
         [this, reactTag = static_cast<int64_t>(reactTag), viewName = std::move(viewName), rootTag = static_cast<int64_t>(rootTag), props = std::move(props)]() mutable
     {
 		EnsureViewManager(viewName);
+		assert(m_viewManagers.contains(viewName));
 		const auto& vm = m_viewManagers[viewName];
         auto shadowNode = vm->Create(reactTag, rootTag, TagToHWND(rootTag), props);
 #ifdef _DEBUG

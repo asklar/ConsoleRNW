@@ -9,6 +9,7 @@ enum class ViewKind {
     Text = 2,
     CommonControl = 3,
 	Image = 4,
+	ScrollView = 5,
 };
 
 template<typename TShadowNode = ShadowNode>
