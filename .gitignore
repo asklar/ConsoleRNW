@@ -390,3 +390,5 @@ FodyWeavers.xsd
 /packages_old
 *.bundle
 *.diagsession
+/example-old
+*.g.rc
