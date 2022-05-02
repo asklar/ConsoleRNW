@@ -62,114 +62,14 @@ void ViewViewManager<TShadowNode>::UpdateLayout(ShadowNode* node, float left, fl
 }
 
 template<typename TShadowNode>
-LRESULT __stdcall ViewViewManager<TShadowNode>::ViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-	auto node = static_cast<TShadowNode*>(GetShadowNode(hwnd));
-	auto tag = IWin32ViewManager::GetTag(hwnd);
-	auto vm = node ? node->m_vm : nullptr;
-	if (node)
+LRESULT __stdcall ViewViewManager<TShadowNode>::ViewWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	if (auto node = static_cast<TShadowNode*>(GetShadowNode(hwnd)))
 	{
-		auto vvm = static_cast<ViewViewManager<TShadowNode>*>(node->m_vm);
-		auto x = 0;
+		return node->WndProc(msg, wParam, lParam);
 	}
-
-	switch (msg) {
-	case WM_NCHITTEST: {
-		return OnHitTest(node);
-		break;
-	}
-	case WM_LBUTTONDOWN: {
-		RaiseOnClick(node, tag, wParam, lParam);
-		return 0;
-	}
-	case WM_MOUSEMOVE: {
-		if (!node->WantsMouseMove()) {
-			__noop;
-		}
-		else {
-			RaiseMouseEnter(node, tag, hwnd, wParam, lParam);
-			return 0;
-		}
-		break;
-	}
-	case WM_MOUSELEAVE: {
-		RaiseMouseLeave(node, tag, wParam, lParam);
-		break;
-	}
-	case WM_PAINT: {
-		return node->OnPaint();
-		break;
-	}
-	case WM_ERASEBKGND:
-		OnEraseBackground(hwnd, node);
-		return 0;
-	}
-	//return DefSubclassProc(hwnd, msg, wParam, lParam);
 	return DefWindowProc(hwnd, msg, wParam, lParam);
-}
 
-template<typename TShadowNode>
-LRESULT ViewViewManager<TShadowNode>::OnHitTest(TShadowNode* node)
-{
-	if (!node->GetValueOrDefault<ShadowNode::IsMouseOverProperty>() && (!node->WantsMouseMove() || !node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>())) {
-		return HTTRANSPARENT;
-	}
-	return HTCLIENT;
-}
-
-template<typename TShadowNode>
-void ViewViewManager<TShadowNode>::OnEraseBackground(const HWND& hwnd, TShadowNode* node)
-{
-	PAINTSTRUCT ps{};
-	auto dc = BeginPaint(hwnd, &ps);
-	RECT rc{};
-	GetClientRect(hwnd, &rc);
-
-	if (auto parent = node->GetParent().lock()) {
-		auto bkColor = parent->GetValue<ShadowNode::BackgroundProperty>();
-		if (bkColor.has_value()) {
-			auto oldDCBrushColor = SetDCBrushColor(dc, bkColor.value());
-			FillRect(dc, &rc, (HBRUSH)GetStockObject(DC_BRUSH));
-			SetDCBrushColor(dc, oldDCBrushColor);
-		}
-		else {
-			FillRect(dc, &rc, (HBRUSH)(COLOR_WINDOW + 1));
-		}
-	}
-	else {
-		// the parent is gone...
-	}
-	EndPaint(hwnd, &ps);
-}
-
-template<typename TShadowNode>
-void ViewViewManager<TShadowNode>::RaiseMouseLeave(TShadowNode* node, int64_t& tag, const WPARAM& wParam, const LPARAM& lParam)
-{
-	node->SetValue<ShadowNode::IsMouseOverProperty>(false);
-	OutputDebugStringA(fmt::format("MouseLeave tag={} vmKind={}\n", tag, typeid(*node->m_vm).name()).c_str());
-	node->m_vm->EmitEvent("topMouseLeave", tag, MouseEventArgs(tag, wParam, lParam));
-}
-
-template<typename TShadowNode>
-void ViewViewManager<TShadowNode>::RaiseMouseEnter(TShadowNode* node, int64_t& tag, const HWND& hwnd, const WPARAM& wParam, const LPARAM& lParam)
-{
-	if (!node->GetValueOrDefault<ShadowNode::IsMouseOverProperty>() && node->GetValueOrDefault<ShadowNode::OnMouseEnterProperty>()) {
-		node->SetValue<ShadowNode::IsMouseOverProperty>(true);
-		OutputDebugStringA(fmt::format("MouseMove tag={} vmKind={}\n", tag, typeid(*node->m_vm).name()).c_str());
-
-		TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd };
-		TrackMouseEvent(&tme);
-
-		node->m_vm->EmitEvent("topMouseEnter", tag, MouseEventArgs(tag, wParam, lParam));
-
-	}
-}
-
-template<typename TShadowNode>
-void ViewViewManager<TShadowNode>::RaiseOnClick(TShadowNode* node, const int64_t& tag, const WPARAM& wParam, const LPARAM& lParam)
-{
-	if (node->GetValueOrParent<ShadowNode::OnPressProperty>()) {
-		node->m_vm->EmitEvent("topClick", tag, MouseEventArgs(tag, wParam, lParam));
-	}
 }
 
 template<typename TShadowNode>
@@ -319,7 +219,7 @@ LRESULT ButtonViewManager::WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	switch (uMsg) {
 		//ViewViewManager::ViewWndProc(hwnd, uMsg, wParam, lParam);
 	case WM_LBUTTONUP:
-		ViewViewManager::RaiseOnClick(node, tag, wParam, lParam);
+		node->RaiseOnClick(tag, wParam, lParam);
 		break;
 	}
 	return DefSubclassProc(hwnd, uMsg, wParam, lParam);
@@ -448,3 +348,124 @@ template struct ViewViewManager<ButtonShadowNode>;
 template struct ViewViewManager<ImageShadowNode>;
 template struct ViewViewManager<TextInputShadowNode>;
 template struct ViewViewManager<ScrollViewShadowNode>;
+
+
+LRESULT ShadowNode::WndProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	auto tag = IWin32ViewManager::GetTag(window);
+	{
+		auto vvm = m_vm;
+		auto x = 0;
+	}
+
+	switch (msg)
+	{
+	case WM_NCHITTEST:
+	{
+		return OnHitTest();
+		break;
+	}
+	case WM_LBUTTONDOWN:
+	{
+		RaiseOnClick(tag, wParam, lParam);
+		return 0;
+	}
+	case WM_MOUSEMOVE:
+	{
+		if (!WantsMouseMove())
+		{
+			__noop;
+		}
+		else
+		{
+			RaiseMouseEnter(tag, wParam, lParam);
+			return 0;
+		}
+		break;
+	}
+	case WM_MOUSELEAVE:
+	{
+		RaiseMouseLeave(tag, wParam, lParam);
+		break;
+	}
+	case WM_PAINT:
+	{
+		return OnPaint();
+		break;
+	}
+	case WM_ERASEBKGND:
+	{
+		OnEraseBackground();
+		return 0;
+	}
+	}
+	//return DefSubclassProc(hwnd, msg, wParam, lParam);
+	return DefWindowProc(window, msg, wParam, lParam);
+}
+
+LRESULT ShadowNode::OnHitTest() const
+{
+	if (!GetValueOrDefault<ShadowNode::IsMouseOverProperty>() && (!WantsMouseMove() || !GetValueOrDefault<ShadowNode::OnMouseEnterProperty>()))
+	{
+		return HTTRANSPARENT;
+	}
+	return HTCLIENT;
+}
+
+void ShadowNode::OnEraseBackground() const
+{
+	PAINTSTRUCT ps{};
+	auto dc = BeginPaint(window, &ps);
+	RECT rc{};
+	GetClientRect(window, &rc);
+
+	if (auto parent = GetParent().lock())
+	{
+		auto bkColor = parent->GetValue<ShadowNode::BackgroundProperty>();
+		if (bkColor.has_value())
+		{
+			auto oldDCBrushColor = SetDCBrushColor(dc, bkColor.value());
+			FillRect(dc, &rc, (HBRUSH)GetStockObject(DC_BRUSH));
+			SetDCBrushColor(dc, oldDCBrushColor);
+		}
+		else
+		{
+			FillRect(dc, &rc, (HBRUSH)(COLOR_WINDOW + 1));
+		}
+	}
+	else
+	{
+		// the parent is gone...
+	}
+	EndPaint(window, &ps);
+}
+
+void ShadowNode::RaiseMouseLeave(int64_t& tag, const WPARAM& wParam, const LPARAM& lParam)
+{
+	SetValue<ShadowNode::IsMouseOverProperty>(false);
+	OutputDebugStringA(fmt::format("MouseLeave tag={} vmKind={}\n", tag, typeid(*m_vm).name()).c_str());
+	m_vm->EmitEvent("topMouseLeave", tag, MouseEventArgs(tag, wParam, lParam));
+}
+
+void ShadowNode::RaiseMouseEnter(int64_t& tag, const WPARAM& wParam, const LPARAM& lParam)
+{
+	if (!GetValueOrDefault<ShadowNode::IsMouseOverProperty>() && GetValueOrDefault<ShadowNode::OnMouseEnterProperty>())
+	{
+		SetValue<ShadowNode::IsMouseOverProperty>(true);
+		OutputDebugStringA(fmt::format("MouseMove tag={} vmKind={}\n", tag, typeid(*m_vm).name()).c_str());
+
+		TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, window };
+		TrackMouseEvent(&tme);
+
+		m_vm->EmitEvent("topMouseEnter", tag, MouseEventArgs(tag, wParam, lParam));
+
+	}
+}
+
+void ShadowNode::RaiseOnClick(const int64_t& tag, const WPARAM& wParam, const LPARAM& lParam)
+{
+	if (GetValueOrParent<ShadowNode::OnPressProperty>())
+	{
+		m_vm->EmitEvent("topClick", tag, MouseEventArgs(tag, wParam, lParam));
+	}
+}

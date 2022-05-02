@@ -29,12 +29,6 @@ struct ViewViewManager : IWin32ViewManager {
 
     void UpdateLayout(ShadowNode* node, float left, float top, float width, float height) override;
 
-	static LRESULT OnHitTest(TShadowNode* node);
-	static void OnEraseBackground(const HWND& hwnd, TShadowNode* node);
-	static void RaiseMouseLeave(TShadowNode* node, int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
-	static void RaiseMouseEnter(TShadowNode* node, int64_t& tag, const HWND& hwnd, const WPARAM& wParam, const LPARAM& lParam);
-	static void RaiseOnClick(TShadowNode* node, const int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
-	
 	YGMeasureFunc GetCustomMeasureFunction() const override
 	{
 		return TShadowNode::IsCustomMeasure ? DefaultYogaSelfMeasureFunc : nullptr;

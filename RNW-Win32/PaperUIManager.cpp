@@ -570,7 +570,7 @@ void PaperUIManager::AddMeasuredRootView(Win32ReactRootView* root) {
 	DoLayout();
 }
 
-void PaperUIManager::Invalidate(HWND hwnd) const
+void PaperUIManager::Invalidate(HWND hwnd)
 {
 	// some properties can require us to redraw our parent, e.g. changing borderRadius 
 	// to a higher value (sharper curves) in fast refresh would leave a sliver of the border painted the old color, 

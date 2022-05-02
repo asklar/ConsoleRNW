@@ -8,7 +8,7 @@
 
 import React from 'react';
 
-import {Text, Image, TextInput, Button, View, requireNativeComponent } from 'react-native';
+import {ScrollView, Text, Image, TextInput, Button, View, requireNativeComponent } from 'react-native';
 import { NativeButton } from './nativeButton';
 
 const App = () => {
@@ -16,7 +16,8 @@ const App = () => {
     const [text, setText] = React.useState('text input field');
     return (
         <>
-            <Text style={{ fontFamily: "Segoe UI", fontSize: 11, 
+            <ScrollView style={{width: 400, height: 400}}>
+            <Text style={{ fontFamily: "Segoe UI", fontSize: 11,
             marginLeft: 24, marginBottom: 12, marginRight: 22, textAlign: 'right'}}>Hello world!</Text>
             <Image source={require('./react.png')}/>
             <TextInput style={{ margin: 20}} onChangeText={(e) => { alert(JSON.stringify(e.nativeEvent)); }} value={text} /> 
@@ -26,7 +27,8 @@ const App = () => {
                 <NativeButton title="Click me" style={{margin: 8 }}
                     fontFamily="Segoe UI" fontSize={12}
                     onClick={() => { console.log('clicked'); alert('clicked'); }} />
-            </View>
+                </View>
+        </ScrollView>
         </>
     );
 };

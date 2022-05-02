@@ -10,6 +10,7 @@ struct ScrollViewShadowNode : ShadowNode
 //    static constexpr bool IsCustomMeasure = true;
     static constexpr DWORD CreationStyle = ShadowNode::CreationStyle | WS_VSCROLL;
 
+    LRESULT WndProc(UINT msg, WPARAM, LPARAM);
 
     //void PaintForeground(HDC dc) override;
     //YGSize Measure(float width,

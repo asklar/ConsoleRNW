@@ -43,7 +43,7 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparseProperty
     ShadowNode(const ShadowNode&) = delete;
     ShadowNode(ShadowNode&&) = default;
 
-    std::weak_ptr<ShadowNode> GetParent() {
+    std::weak_ptr<ShadowNode> GetParent() const {
         return m_parent;
     }
     
@@ -113,7 +113,7 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparseProperty
         return GetDpiForWindow(window) / 96.0f;
     }
 
-    virtual bool WantsMouseMove() { return true; }
+    virtual bool WantsMouseMove() const { return true; }
 
     virtual YGSize MeasureText() const;
     LOGFONT GetLogFont() const;
@@ -140,6 +140,16 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparseProperty
                     { "tabIndex", "number" },
         };
     }
+
+    LRESULT WndProc(UINT msg, WPARAM, LPARAM);
+    LRESULT OnHitTest() const;
+    void OnEraseBackground() const;
+    void RaiseMouseLeave(int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
+    void RaiseMouseEnter(int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
+    void RaiseOnClick(const int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
+
+
+
 protected:
     virtual void PaintBackground(HDC dc);
     virtual void PaintForeground(HDC dc);
@@ -170,14 +180,14 @@ struct TextShadowNode : ShadowNode {
         float height,
         YGMeasureMode heightMode) override;
     YGSize MeasureText() const override;
-    bool WantsMouseMove() override { return false; }
+    bool WantsMouseMove() const override { return false; }
     static constexpr const wchar_t* WindowClassName = L"RCTText";
     static constexpr bool IsCustomMeasure = true;
 };
 struct RawTextShadowNode : ShadowNode {
     RawTextShadowNode(HWND w, YGConfigRef config, IWin32ViewManager* vm) : ShadowNode(w, config, vm){}
     void PaintForeground(HDC dc) override;
-    bool WantsMouseMove() override { return false; }
+    bool WantsMouseMove() const override { return false; }
     std::shared_ptr<TextShadowNode> Parent() const {
         return std::static_pointer_cast<TextShadowNode>(m_parent.lock());
     }

@@ -207,5 +207,5 @@ private:
     std::unordered_map<std::string, std::unique_ptr<IWin32ViewManager>> m_viewManagers{};
     void EnsureViewManager(const std::string& viewManagerName);
 
-    void Invalidate(HWND hwnd) const;
+    static void Invalidate(HWND hwnd);
 };
