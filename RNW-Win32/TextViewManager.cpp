@@ -121,12 +121,12 @@ void TextViewManager::UpdateLayout(ShadowNode* node, float left, float top, floa
 YGSize MeasureText(HWND window, std::wstring_view str, bool withScale)
 {
 	SIZE sz{};
-	auto len = static_cast<int>(str.length());
+	const auto len = static_cast<int>(str.length());
 	auto hdc = GetDC(window);
 
 	Gdiplus::Graphics g(window);
 	GetTextExtentPoint32(hdc, str.data(), len, &sz);
-	float scale = withScale ? GetDpiForWindow(window) / 96.0f : 1.f;
+	const float scale = withScale ? GetDpiForWindow(window) / 96.0f : 1.f;
 	return { static_cast<float>(sz.cx) * scale , static_cast<float>(sz.cy) * scale };
 }
 
@@ -134,7 +134,8 @@ YGSize TextShadowNode::Measure(float width,
 	YGMeasureMode widthMode,
 	float height,
 	YGMeasureMode heightMode) {
-	return MeasureText();
+	auto rawTextSize = m_children[0].lock()->Measure(width, widthMode, height, heightMode);
+	return rawTextSize;
 }
 
 YGSize TextShadowNode::MeasureText() const {
@@ -142,10 +143,15 @@ YGSize TextShadowNode::MeasureText() const {
 }
 
 
-YGSize ShadowNode::MeasureText() const {
+YGSize RawTextShadowNode::Measure(float width,
+	YGMeasureMode widthMode,
+	float height,
+	YGMeasureMode heightMode)
+{
 	auto str = GetValue<ShadowNode::TextProperty>();
-	if (str.has_value()) {
-		auto len = static_cast<int>(str->length());
+	if (str.has_value())
+	{
+		const auto len = static_cast<int>(str->length());
 		auto hdc = GetDC(window);
 
 		Gdiplus::Graphics g(window);
@@ -154,11 +160,55 @@ YGSize ShadowNode::MeasureText() const {
 		auto fontSize = GetValueOrParentOrDefault<ShadowNode::FontSizeProperty>(12.f);
 		Gdiplus::Font font(fontFamily.c_str(), fontSize);
 		Gdiplus::RectF boundingBox{};
-		if (g.MeasureString(str->c_str(), len, &font, { 0.f, 0.f }, &boundingBox) != Gdiplus::Status::Ok) {
-			assert(false);
+
+		// Vertical
+		if (!isnan(width))
+		{
+			if (g.MeasureString(str->c_str(), len, &font, Gdiplus::RectF{ 0, 0, width, height }, &boundingBox) != Gdiplus::Status::Ok)
+			{
+				assert(false);
+			}
+		}
+		else
+		{
+			g.MeasureString(str->c_str(), len, &font, { 0, 0 }, &boundingBox);
 		}
 
-		float scale = 1.f;
+		const float scale = 1.f;
+		return { static_cast<float>(boundingBox.Width) * scale , static_cast<float>(boundingBox.Height) * scale };
+	}
+	return { 42,42 };
+}
+
+YGSize ShadowNode::MeasureText() const {
+	auto str = GetValue<ShadowNode::TextProperty>();
+	if (str.has_value()) {
+		const auto len = static_cast<int>(str->length());
+		auto hdc = GetDC(window);
+
+		Gdiplus::Graphics g(window);
+
+		auto fontFamily = GetValueOrParentOrDefault<ShadowNode::FontFamilyProperty>(L"Segoe UI");
+		auto fontSize = GetValueOrParentOrDefault<ShadowNode::FontSizeProperty>(12.f);
+		Gdiplus::Font font(fontFamily.c_str(), fontSize);
+		Gdiplus::RectF boundingBox{};
+		auto parentDims = RectFFromYogaNode(m_parent.lock()->yogaNode.get());
+		const auto rootHwnd = PaperUIManager::GetFromContext(m_vm->m_context.Handle())->RootHWND();
+		RECT grandParentRect{};
+			GetWindowRect(rootHwnd, &grandParentRect);
+		if (!isnan(parentDims.Width) && !isnan(parentDims.Height))
+		{
+			if (g.MeasureString(str->c_str(), len, &font, parentDims, &boundingBox) != Gdiplus::Status::Ok)
+			{
+				assert(false);
+			}
+		}
+		else
+		{
+			g.MeasureString(str->c_str(), len, &font, { 0, 0 }, &boundingBox);
+		}
+
+		const float scale = 1.f;
 		return { static_cast<float>(boundingBox.Width) * scale , static_cast<float>(boundingBox.Height) * scale };
 	}
 	return { 42,42 };
@@ -190,7 +240,7 @@ void RawTextShadowNode::PaintForeground(HDC dc) {
 		SetBkColor(dc, bkColor.has_value() ? bkColor.value() : GetSysColor(COLOR_WINDOW));
 		auto textColor_ = GetValueOrParent<ShadowNode::ForegroundProperty>();
 		auto textColor= textColor_.has_value() ? textColor_.value() : GetSysColor(COLOR_WINDOWTEXT);
-		Gdiplus::Color c(GetRValue(textColor), GetGValue(textColor), GetBValue(textColor));
+		const Gdiplus::Color c(GetRValue(textColor), GetGValue(textColor), GetBValue(textColor));
 		auto fontFamily = GetValueOrParentOrDefault<ShadowNode::FontFamilyProperty>(L"Segoe UI");
 		auto fontSize = GetValueOrParentOrDefault<ShadowNode::FontSizeProperty>(12.f);
 		Gdiplus::Font font(fontFamily.c_str(), fontSize);
@@ -226,13 +276,17 @@ void RawTextShadowNode::PaintForeground(HDC dc) {
 		r.left = 0;
 		r.top = 0;
 
-		Gdiplus::RectF rc(0, 0, static_cast<Gdiplus::REAL>(r.right), static_cast<Gdiplus::REAL>(r.bottom));
+		const Gdiplus::RectF rc(0, 0, static_cast<Gdiplus::REAL>(r.right), static_cast<Gdiplus::REAL>(r.bottom));
 
-		float scale = GetScaleFactor();
+		const auto parentDims = RectFFromYogaNode(m_parent.lock()->yogaNode.get());
+
+		const float scale = GetScaleFactor();
 		Gdiplus::StringFormat sf{};
 		sf.SetAlignment(sa);
+
 		Gdiplus::SolidBrush brush(c);
 		g.DrawString(text->c_str(), -1, &font, rc, &sf, &brush);
+
 		//DrawText(dc, text.value().c_str(), -1, &r, 0);
 //		DrawTextW(dc, text->c_str(), -1, &r, format);
 		//SetTextAlign(dc, oldAlign);

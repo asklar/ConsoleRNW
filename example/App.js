@@ -1,36 +1,53 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- * @flow strict-local
- */
-
 import React from 'react';
-
-import {ScrollView, Text, Image, TextInput, Button, View, requireNativeComponent } from 'react-native';
-import { NativeButton } from './nativeButton';
+import { StyleSheet, Text, SafeAreaView, ScrollView, StatusBar } from 'react-native';
 
 const App = () => {
-    const [color, setColor] = React.useState('red');
-    const [text, setText] = React.useState('text input field');
     return (
-        <>
-            <ScrollView style={{width: 400, height: 400}}>
-            <Text style={{ fontFamily: "Segoe UI", fontSize: 11,
-            marginLeft: 24, marginBottom: 12, marginRight: 22, textAlign: 'right'}}>Hello world!</Text>
-            <Image source={require('./react.png')}/>
-            <TextInput style={{ margin: 20}} onChangeText={(e) => { alert(JSON.stringify(e.nativeEvent)); }} value={text} /> 
-            <View style={{ backgroundColor: color, flexDirection: 'row', margin: 8 }} 
-                onMouseEnter={() => { setColor('yellow'); }} 
-                onMouseLeave={() => { setColor('red'); }}>
-                <NativeButton title="Click me" style={{margin: 8 }}
-                    fontFamily="Segoe UI" fontSize={12}
-                    onClick={() => { console.log('clicked'); alert('clicked'); }} />
-                </View>
-        </ScrollView>
-        </>
+        <SafeAreaView style={styles.container}>
+            <ScrollView style={styles.scrollView}>
+                <Text style={styles.text}>
+                    Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+                    eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad
+                    minim veniam, quis nostrud exercitation ullamco laboris nisi ut
+                    aliquip ex ea commodo consequat. Duis aute irure dolor in
+                    reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla
+                    pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
+                    culpa qui officia deserunt mollit anim id est laborum.
+                </Text>
+            </ScrollView>
+        </SafeAreaView>
     );
-};
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        paddingTop: StatusBar.currentHeight,
+    },
+    scrollView: {
+        backgroundColor: 'pink',
+        marginHorizontal: 20,
+    },
+    text: {
+        fontSize: 22,
+    },
+});
 
 export default App;
+
+/*
+        <SafeAreaView style={styles.container}>
+            <ScrollView style={styles.scrollView}>
+                <Text style={styles.text}>
+                    Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+                    eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad
+                    minim veniam, quis nostrud exercitation ullamco laboris nisi ut
+                    aliquip ex ea commodo consequat. Duis aute irure dolor in
+                    reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla
+                    pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
+                    culpa qui officia deserunt mollit anim id est laborum.
+                </Text>
+            </ScrollView>
+        </SafeAreaView>
+
+ */

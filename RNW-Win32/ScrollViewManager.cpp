@@ -2,14 +2,23 @@
 #include "ScrollViewManager.h"
 #include "PaperUIManager.h"
 
-RECT RectFromYogaNode(YGNodeRef node)
+YGSize ScrollContentViewShadowNode::Measure(float width,
+	YGMeasureMode widthMode,
+	float height,
+	YGMeasureMode heightMode)
 {
-	return RECT{
-		static_cast<LONG>(YGNodeLayoutGetLeft(node)),
-		static_cast<LONG>(YGNodeLayoutGetTop(node)),
-		static_cast<LONG>(YGNodeLayoutGetLeft(node) + YGNodeLayoutGetWidth(node)),
-		static_cast<LONG>(YGNodeLayoutGetTop(node) + YGNodeLayoutGetHeight(node)),
-	};
+	// assume vertical scroll for now
+	YGSize r{};
+	for (auto& child : m_children)
+	{
+		if (auto c = child.lock())
+		{
+			auto childMeasure = c->Measure(width, widthMode, height, heightMode);
+			r.height += childMeasure.height;
+			r.width = std::max(r.width, childMeasure.width);
+		}
+	}
+	return r;
 }
 
 LRESULT ScrollViewShadowNode::WndProc(UINT msg, WPARAM wParam, LPARAM lParam)
@@ -30,64 +39,75 @@ LRESULT ScrollViewShadowNode::WndProc(UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 	case WM_VSCROLL:
 	{
-		auto p = LOWORD(wParam);
+		const auto p = LOWORD(wParam);
 		auto dy = 0;
+		constexpr auto LineScrollPx = 10;
+		constexpr auto PageScrollPx = 50;
 		switch (p)
 		{
-		case SB_LINEDOWN: dy = 1; break;
-		case SB_LINEUP: dy = -1; break;
-		case SB_PAGEDOWN: dy = 10; break;
-		case SB_PAGEUP: dy -= 10; break;
+		case SB_LINEDOWN: dy = LineScrollPx; break;
+		case SB_LINEUP: dy = -LineScrollPx; break;
+		case SB_PAGEDOWN: dy = PageScrollPx; break;
+		case SB_PAGEUP: dy = -PageScrollPx; break;
 		case SB_TOP: dy = 0; break;
 		case SB_BOTTOM: dy = INT_MAX; break;
+		case SB_THUMBTRACK: return 0;
+		default: break;
 		}
 
 		SCROLLINFO si{ sizeof(SCROLLINFO) };
 
 		si.fMask = SIF_POS | SIF_PAGE | SIF_RANGE | SIF_TRACKPOS;
 		GetScrollInfo(window, SB_VERT, &si);
-		si.nPos += dy;
-		//HWND childWnd{ nullptr };
-		//if (m_children.size() != 0)
-		//{
-		//	if (auto child = m_children[0].lock())
-		//	{
-		//		childWnd = child->window;
-		//	}
-		//}
-		SetScrollInfo(window, SB_VERT, &si, true);
+		const auto oldPos = si.nPos;
+		if (p == SB_THUMBPOSITION) {
+			si.nPos = HIWORD(wParam);
+		}
+		else
+		{
+			si.nPos += dy;
+		}
 
-		ScrollWindowEx(window, 0, -dy, nullptr, nullptr, nullptr, nullptr, SW_SCROLLCHILDREN);
-		RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE);
+		dy = si.nPos - oldPos;
+		const auto newPos = SetScrollInfo(window, SB_VERT, &si, true);
+		cdbg << "Scroll by " << dy << "  tag  " << IWin32ViewManager::GetTag(window) << "\n";
+		if (newPos != oldPos)
+		{
+			ScrollWindowEx(window, 0, -dy, nullptr, nullptr, nullptr, nullptr, SW_SCROLLCHILDREN);
+			RedrawWindow(::GetParent(window), nullptr, nullptr, RDW_INVALIDATE); // we need to redraw the parent's background
+		}
 		return 0;
 	}
 
-	case WM_SIZE:
-	{
-		SCROLLINFO si{ sizeof(SCROLLINFO) };
-		auto w = YGNodeStyleGetWidth(yogaNode.get());
-		auto h = YGNodeStyleGetHeight(yogaNode.get());
-		RECT r{};
-		for (auto& child : m_children)
-		{
-			if (auto c = child.lock())
-			{
-				auto childMeasure = c->Measure(0, YGMeasureModeExactly, 0, YGMeasureModeExactly);
-				auto childRect = RectFromYogaNode(c->yogaNode.get());
-				UnionRect(&r, &r, &childRect);
-			}
-		}
-		auto measure = Measure(0, YGMeasureModeExactly, 0, YGMeasureModeExactly);
-		si.fMask = SIF_RANGE;
-		si.nMin = 0;
-//		si.nPos = 0;
-		si.nMax = measure.height ? measure.height : (r.bottom - r.top);
-		SetScrollInfo(window, SB_VERT, &si, TRUE);
-		EnableScrollBar(window, SB_VERT, ESB_ENABLE_BOTH);
-
-		break;
-	}
 	}
 
 	return ShadowNode::WndProc(msg, wParam, lParam);
+}
+
+void ScrollViewShadowNode::UpdateLayout(float left, float top, float width, float height)
+{
+	if (!isnan(width) && !isnan(height))
+	{
+		ShadowNode::UpdateLayout(left, top, width, height);
+
+		SCROLLINFO si{ sizeof(SCROLLINFO) };
+
+		si.fMask = SIF_RANGE | SIF_POS;
+		si.nMin = 0;
+		si.nPos = 0;
+		si.nMax = static_cast<int>(height);
+		SetScrollInfo(window, SB_VERT, &si, TRUE);
+		EnableScrollBar(window, SB_VERT, ESB_ENABLE_BOTH);
+
+		float top = 0;
+		for (const auto c : m_children)
+		{
+			if (const auto child = c.lock())
+			{
+				auto childMeasure = child->Measure(width, YGMeasureModeAtMost, height, YGMeasureModeAtMost);
+				child->UpdateLayout(0, top, childMeasure.width, childMeasure.height);
+				top += childMeasure.height;
+			}
+		}
+	}
 }

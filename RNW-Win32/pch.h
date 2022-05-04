@@ -55,10 +55,27 @@ inline const cdbg_t& operator<<(const cdbg_t& c, const std::string& v) {
     OutputDebugStringA(v.data());
     return c;
 }
-inline const cdbg_t& operator<<(const cdbg_t& c, const char* v) {
+inline const cdbg_t& operator<<(const cdbg_t& c, const char* v)
+{
     OutputDebugStringA(v);
     return c;
 }
+
+inline const cdbg_t& operator<<(const cdbg_t& c, float v)
+{
+    auto t = fmt::format("{:.2f}", v);
+    return c << t.c_str();
+}
+
+inline const cdbg_t& operator<<(const cdbg_t& c, HWND v)
+{
+    char buffer[32]{};
+    _ui64toa_s(reinterpret_cast<uint64_t>(v), buffer, std::size(buffer), 16);
+    OutputDebugStringA(buffer);
+    return c;
+}
+
+
 inline constexpr cdbg_t cdbg{};
 
 

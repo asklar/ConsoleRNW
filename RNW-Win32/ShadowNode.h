@@ -14,6 +14,32 @@ inline YGSize operator*(const YGSize& a, float f) {
     return { a.width * f, a.height * f};
 }
 
+inline RECT RectFromYogaNode(YGNodeRef node)
+{
+    return RECT{
+        static_cast<LONG>(YGNodeLayoutGetLeft(node)),
+        static_cast<LONG>(YGNodeLayoutGetTop(node)),
+        static_cast<LONG>(YGNodeLayoutGetLeft(node) + YGNodeLayoutGetWidth(node)),
+        static_cast<LONG>(YGNodeLayoutGetTop(node) + YGNodeLayoutGetHeight(node)),
+    };
+}
+
+inline auto RectFFromYogaNode(YGNodeRef node)
+{
+    return Gdiplus::RectF{
+        YGNodeLayoutGetLeft(node),
+        YGNodeLayoutGetTop(node),
+        YGNodeLayoutGetWidth(node),
+        YGNodeLayoutGetHeight(node),
+    };
+}
+
+inline Gdiplus::RectF ToRectF(const RECT& r)
+{
+    return { static_cast<float>(r.left), static_cast<float>(r.top), static_cast<float>(r.right - r.left), static_cast<float>(r.bottom - r.top) };
+}
+
+
 struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparsePropertyIndex, std::wstring> {
     struct YogaNodeDeleter {
         void operator()(YGNodeRef node) {
@@ -148,7 +174,13 @@ struct ShadowNode : PropertyStorage<PropertyIndex>, SparseStorage<SparseProperty
     void RaiseMouseEnter(int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
     void RaiseOnClick(const int64_t& tag, const WPARAM& wParam, const LPARAM& lParam);
 
-
+    virtual void UpdateLayout(float left, float top, float width, float height)
+    {
+        if (!isnan(width) && !isnan(height))
+        {
+            SetWindowPos(window, nullptr, std::lround(left), std::lround(top), std::lround(width), std::lround(height), SWP_NOZORDER);
+        }
+    }
 
 protected:
     virtual void PaintBackground(HDC dc);
@@ -183,6 +215,9 @@ struct TextShadowNode : ShadowNode {
     bool WantsMouseMove() const override { return false; }
     static constexpr const wchar_t* WindowClassName = L"RCTText";
     static constexpr bool IsCustomMeasure = true;
+    static constexpr bool IsCustomWindowClass = true;
+
+    void UpdateLayout(float left, float top, float width, float height) override;
 };
 struct RawTextShadowNode : ShadowNode {
     RawTextShadowNode(HWND w, YGConfigRef config, IWin32ViewManager* vm) : ShadowNode(w, config, vm){}
@@ -191,8 +226,14 @@ struct RawTextShadowNode : ShadowNode {
     std::shared_ptr<TextShadowNode> Parent() const {
         return std::static_pointer_cast<TextShadowNode>(m_parent.lock());
     }
+    YGSize Measure(float width,
+        YGMeasureMode widthMode,
+        float height,
+        YGMeasureMode heightMode) override;
+
     static constexpr const wchar_t* WindowClassName = L"RCTRawText";
     static constexpr bool IsCustomMeasure = true;
+
 };
 
 struct ButtonShadowNode : ShadowNode

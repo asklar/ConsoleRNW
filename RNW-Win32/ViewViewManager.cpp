@@ -51,14 +51,8 @@ static auto MouseEventArgs(int64_t tag, WPARAM wParam, LPARAM lParam) {
 
 template<typename TShadowNode>
 void ViewViewManager<TShadowNode>::UpdateLayout(ShadowNode* node, float left, float top, float width, float height) {
-	SetWindowPos(node->window, nullptr, std::lround(left), std::lround(top), std::lround(width), std::lround(height), SWP_NOZORDER);
-	if (m_kind == ViewKind::Text) {
-		for (const auto& child_weak : node->m_children) {
-			if (auto child = child_weak.lock()) {
-				child->m_vm->UpdateLayout(child.get(), left, top, width, height);
-			}
-		}
-	}
+	auto n = static_cast<TShadowNode*>(node);
+	n->UpdateLayout(left, top, width, height);
 }
 
 template<typename TShadowNode>
@@ -277,8 +271,12 @@ void ShadowNode::CreateFont() {
 
 #ifdef _DEBUG
 void ShadowNode::PrintNode(int level) const {
-	cdbg << "VM=" << (m_vm ? typeid(*m_vm).name() : "ROOT") << "\n";
+	cdbg << "VM=" << (m_vm ? typeid(*m_vm).name() : "ROOT") << " @ (" << YGNodeLayoutGetLeft(yogaNode.get()) << ", " << YGNodeLayoutGetRight(yogaNode.get()) << ")\n";
 	auto indent = std::string(level * 2, ' ');
+	cdbg << indent << "    \tDimensions: = (" << YGNodeLayoutGetWidth(yogaNode.get()) << ", " << YGNodeLayoutGetHeight(yogaNode.get()) << ")\n";
+	RECT r{};
+	GetWindowRect(window, &r);
+	cdbg << indent << "    \tHWND: = 0x" << window << " (" << r.right - r.left << ", " << r.bottom - r.top << ")\n";
 	for (auto i = 0; i < m_properties.size(); i++) {
 		std::string strValue = PrintValue(i);
 		if (!strValue.empty()) {
@@ -348,6 +346,7 @@ template struct ViewViewManager<ButtonShadowNode>;
 template struct ViewViewManager<ImageShadowNode>;
 template struct ViewViewManager<TextInputShadowNode>;
 template struct ViewViewManager<ScrollViewShadowNode>;
+template struct ViewViewManager<ScrollContentViewShadowNode>;
 
 
 LRESULT ShadowNode::WndProc(UINT msg, WPARAM wParam, LPARAM lParam)
@@ -467,5 +466,17 @@ void ShadowNode::RaiseOnClick(const int64_t& tag, const WPARAM& wParam, const LP
 	if (GetValueOrParent<ShadowNode::OnPressProperty>())
 	{
 		m_vm->EmitEvent("topClick", tag, MouseEventArgs(tag, wParam, lParam));
+	}
+}
+
+void TextShadowNode::UpdateLayout(float left, float top, float width, float height)
+{
+	ShadowNode::UpdateLayout(left, top, width, height);
+	for (const auto& child_weak : m_children)
+	{
+		if (auto child = child_weak.lock())
+		{
+			child->m_vm->UpdateLayout(child.get(), left, top, width, height);
+		}
 	}
 }

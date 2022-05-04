@@ -57,7 +57,7 @@ void PaperUIManager::EnsureViewManager(const std::string& viewManagerName) {
 			{ "RCTImageView", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ImageViewManager(context, ycr)); }},
 			{ "Image", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ImageViewManager(context, ycr)); }},
 			{ "RCTTextInput", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new TextInputViewManager(context, ycr)); }},
-			{ "RCTScrollContentView", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ScrollViewManager(context, ycr)); }},
+			{ "RCTScrollContentView", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ScrollContentViewManager(context, ycr)); }},
 			{ "RCTScrollView", [](winrt::Microsoft::ReactNative::ReactContext context, YGConfigRef ycr) { return std::unique_ptr<IWin32ViewManager>(new ScrollViewManager(context, ycr)); }},
 		};
 		const auto& entry = std::find_if(std::begin(viewMgrFactory), std::end(viewMgrFactory), [&viewManagerName](const auto& i) { return i.name == viewManagerName; });
@@ -187,7 +187,8 @@ void PaperUIManager::DoLayout() {
 	float actualWidth = static_cast<float>(rect.right - rect.left);
     float actualHeight = static_cast<float>(rect.bottom - rect.top);
 
-	actualWidth -= 24;//test
+	actualWidth -= 24;
+	actualHeight -= 48;
 
     // We must always run layout in LTR mode, which might seem unintuitive.
     // We will flip the root of the tree into RTL by forcing the root XAML node's FlowDirection to RightToLeft
